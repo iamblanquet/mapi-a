@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f172a">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>GPS Tracker PWA & Dashboard</title>
+  <title>GPS Tracker & Historial de Viajes</title>
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="lib/leaflet/leaflet.css">
   <link rel="stylesheet" href="style.css">
@@ -31,7 +31,7 @@
       <p class="modal-sub">Se guardará tu ubicación GPS actual como una parada en el viaje.</p>
       <div class="input-group">
         <label for="stopNote">Motivo o Nombre de la Parada:</label>
-        <input type="text" id="stopNote" placeholder="Ej: Carga de gasolina, Almuerzo, Cliente..." />
+        <input type="text" id="stopNote" placeholder="Ej: Gasolinera, Almuerzo, Cliente..." />
       </div>
       <div class="modal-actions">
         <button id="btnCancelStop" class="btn btn-secondary">Cancelar</button>
@@ -40,11 +40,35 @@
     </div>
   </div>
 
+  <!-- Modal para Finalizar y Nombrar Viaje -->
+  <div id="finishTripModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h3>🏁 Finalizar y Guardar Viaje</h3>
+      <p class="modal-sub">El viaje se guardará en tu historial local y en Render.</p>
+      <div class="input-group">
+        <label for="tripNameInput">Nombre o Etiqueta del Viaje:</label>
+        <input type="text" id="tripNameInput" placeholder="Ej: Viaje a Oficina, Reparto Norte..." />
+      </div>
+      <div class="stat-row" style="margin: 8px 0;">
+        <span>Distancia Total:</span>
+        <strong id="modalTripDist">0.00 km</strong>
+      </div>
+      <div class="stat-row" style="margin-bottom: 8px;">
+        <span>Paradas Registradas:</span>
+        <strong id="modalTripStops">0</strong>
+      </div>
+      <div class="modal-actions">
+        <button id="btnCancelFinish" class="btn btn-secondary">Seguir Grabando</button>
+        <button id="btnConfirmFinish" class="btn btn-primary">Guardar en Historial</button>
+      </div>
+    </div>
+  </div>
+
   <div class="app-container">
     <header class="app-header">
       <div class="header-title">
         <span class="pulse-icon" id="pulseIndicator"></span>
-        <h1>GPS Tracker & Map</h1>
+        <h1>GPS Tracker & Trips</h1>
       </div>
       <div class="header-badges">
         <button id="btnInstallPwa" class="badge pwa-install hidden">📲 Instalar</button>
@@ -52,92 +76,125 @@
       </div>
     </header>
 
-    <!-- Controles Principales -->
-    <section class="controls-card">
-      <button id="btnStart" class="btn btn-primary btn-large">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-        Iniciar Viaje
-      </button>
-      <button id="btnStop" class="btn btn-danger btn-large" disabled>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12"></rect></svg>
-        Detener
-      </button>
-      <button id="btnOpenStopModal" class="btn btn-warning btn-large" disabled>
-        📍 Parada
-      </button>
-    </section>
+    <!-- Barra de Pestañas de Navegación -->
+    <nav class="nav-tabs">
+      <button id="tabBtnLive" class="nav-tab active">🔴 Grabador en Vivo</button>
+      <button id="tabBtnHistory" class="nav-tab">📁 Historial de Viajes (<span id="tabHistoryCount">0</span>)</button>
+    </nav>
 
-    <!-- Barra de Accesos Rápidos -->
-    <div class="quick-actions">
-      <button id="btnEnterPocket" class="btn btn-pocket" disabled>
-        🕶️ Modo Bolsillo (OLED)
-      </button>
-      <button id="btnCenterMap" class="btn btn-secondary btn-icon-only" title="Centrar Mapa en mi posición">
-        🎯 Centrar
-      </button>
-      <button id="btnFitMap" class="btn btn-secondary btn-icon-only" title="Ver todo el recorrido">
-        🗺️ Ajustar
-      </button>
+    <!-- Banner de Notificación de Inspección de Viaje Histórico -->
+    <div id="viewingTripBanner" class="trip-inspect-banner hidden">
+      <div class="banner-info">
+        <span>Mostrando viaje guardado:</span>
+        <strong id="viewingTripTitle">Nombre del Viaje</strong>
+      </div>
+      <button id="btnExitTripView" class="btn btn-secondary btn-sm">Volver a En Vivo</button>
     </div>
 
-    <!-- Dashboard del Viaje en Vivo -->
-    <section class="grid-metrics dashboard-metrics">
-      <div class="metric-card">
-        <span class="metric-label">Distancia</span>
-        <span class="metric-value" id="valDistance">0.00 km</span>
-      </div>
-      <div class="metric-card">
-        <span class="metric-label">Tiempo</span>
-        <span class="metric-value" id="valDuration">00:00:00</span>
-      </div>
-      <div class="metric-card">
-        <span class="metric-label">Velocidad</span>
-        <span class="metric-value" id="valSpeed">0 km/h</span>
-      </div>
-      <div class="metric-card">
-        <span class="metric-label">Paradas</span>
-        <span class="metric-value text-warning" id="valStopsCount">0</span>
-      </div>
-    </section>
+    <!-- SECCIÓN 1: VISTA EN VIVO Y MAPA -->
+    <div id="sectionLiveView">
+      <!-- Controles Principales -->
+      <section class="controls-card">
+        <button id="btnStart" class="btn btn-primary btn-large">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          Iniciar Viaje
+        </button>
+        <button id="btnStop" class="btn btn-danger btn-large" disabled>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12"></rect></svg>
+          Finalizar
+        </button>
+        <button id="btnOpenStopModal" class="btn btn-warning btn-large" disabled>
+          📍 Parada
+        </button>
+      </section>
 
-    <!-- Visor del Mapa Leaflet -->
-    <section class="card map-card">
-      <div class="card-header">
-        <h2>Recorrido del Viaje</h2>
-        <span class="status-indicator" id="mapStatusText">Esperando GPS</span>
+      <!-- Barra de Accesos Rápidos -->
+      <div class="quick-actions">
+        <button id="btnEnterPocket" class="btn btn-pocket" disabled>
+          🕶️ Modo Bolsillo (OLED)
+        </button>
+        <button id="btnCenterMap" class="btn btn-secondary btn-icon-only" title="Centrar Mapa">
+          🎯 Centrar
+        </button>
+        <button id="btnFitMap" class="btn btn-secondary btn-icon-only" title="Ajustar Recorrido">
+          🗺️ Ajustar
+        </button>
       </div>
-      <div id="tripMap" class="map-viewport"></div>
-    </section>
 
-    <!-- Lista de Paradas del Viaje -->
-    <section class="card stops-card" id="stopsSection">
-      <div class="card-header">
-        <h2>Paradas Registradas (<span id="stopsTotalBadge">0</span>)</h2>
-      </div>
-      <div class="stops-list" id="stopsList">
-        <p class="empty-text">No has registrado paradas en este viaje.</p>
-      </div>
-    </section>
+      <!-- Dashboard de Métricas en Vivo -->
+      <section class="grid-metrics dashboard-metrics">
+        <div class="metric-card">
+          <span class="metric-label">Distancia</span>
+          <span class="metric-value" id="valDistance">0.00 km</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Tiempo</span>
+          <span class="metric-value" id="valDuration">00:00:00</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Velocidad</span>
+          <span class="metric-value" id="valSpeed">0 km/h</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Paradas</span>
+          <span class="metric-value text-warning" id="valStopsCount">0</span>
+        </div>
+      </section>
 
-    <!-- Estado y Señal GPS -->
-    <section class="card stats-card">
-      <div class="stat-row">
-        <span>Próxima Captura (10s):</span>
-        <strong id="nextCaptureCountdown" class="text-highlight">--</strong>
+      <!-- Visor del Mapa Leaflet -->
+      <section class="card map-card">
+        <div class="card-header">
+          <h2 id="mapHeading">Recorrido del Viaje</h2>
+          <span class="status-indicator" id="mapStatusText">Esperando GPS</span>
+        </div>
+        <div id="tripMap" class="map-viewport"></div>
+      </section>
+
+      <!-- Lista de Paradas del Viaje en Curso -->
+      <section class="card stops-card" id="stopsSection">
+        <div class="card-header">
+          <h2>Paradas Registradas (<span id="stopsTotalBadge">0</span>)</h2>
+        </div>
+        <div class="stops-list" id="stopsList">
+          <p class="empty-text">No has registrado paradas en este viaje.</p>
+        </div>
+      </section>
+
+      <!-- Estado y Señal GPS -->
+      <section class="card stats-card">
+        <div class="stat-row">
+          <span>Próxima Captura (10s):</span>
+          <strong id="nextCaptureCountdown" class="text-highlight">--</strong>
+        </div>
+        <div class="stat-row">
+          <span>Calidad GPS:</span>
+          <strong id="gpsQualityText" class="text-muted">Esperando señal</strong>
+        </div>
+        <div class="stat-row">
+          <span>Puntos Grabados:</span>
+          <strong id="pointsCount">0</strong>
+        </div>
+        <div class="stat-row">
+          <span>Última Coordenada:</span>
+          <span id="lastCoordText">--.------, --.------</span>
+        </div>
+      </section>
+    </div>
+
+    <!-- SECCIÓN 2: HISTORIAL DE VIAJES -->
+    <div id="sectionHistoryView" class="hidden">
+      <div class="card history-header-card">
+        <div class="card-header">
+          <h2>Viajes Guardados</h2>
+          <button id="btnRefreshTrips" class="btn-text">🔄 Actualizar</button>
+        </div>
+        <p class="history-desc">Aquí se almacenan los viajes que has realizado. Puedes tocar cualquiera para abrirlo en el mapa y ver su trazado y paradas.</p>
       </div>
-      <div class="stat-row">
-        <span>Calidad GPS:</span>
-        <strong id="gpsQualityText" class="text-muted">Esperando señal</strong>
+
+      <div class="trips-container" id="tripsContainer">
+        <p class="empty-text">Cargando historial de viajes...</p>
       </div>
-      <div class="stat-row">
-        <span>Puntos Grabados:</span>
-        <strong id="pointsCount">0</strong>
-      </div>
-      <div class="stat-row">
-        <span>Última Coordenada:</span>
-        <span id="lastCoordText">--.------, --.------</span>
-      </div>
-    </section>
+    </div>
 
     <!-- Configuración del Servidor y Audio Hack (Colapsable) -->
     <details class="card config-details">
@@ -175,7 +232,7 @@
 
         <label class="checkbox-container">
           <input type="checkbox" id="syncWithServer" checked>
-          <span>Enviar cada punto y parada a Render en tiempo real</span>
+          <span>Sincronizar viajes y paradas con Render</span>
         </label>
         <label class="checkbox-container audio-hack-container">
           <input type="checkbox" id="useAudioHack" checked>
@@ -195,7 +252,7 @@
         <button id="btnClearLog" class="btn-text">Limpiar</button>
       </div>
       <div class="log-terminal" id="logConsole">
-        <div class="log-entry log-system">[PWA] Mapa listo. Presiona "Iniciar Viaje".</div>
+        <div class="log-entry log-system">[PWA] Sistema listo. Presiona "Iniciar Viaje".</div>
       </div>
     </details>
 
@@ -203,7 +260,7 @@
     <footer class="app-footer">
       <button id="btnExportJson" class="btn btn-outline">Exportar JSON</button>
       <button id="btnExportCsv" class="btn btn-outline">Exportar CSV</button>
-      <button id="btnClearHistory" class="btn btn-outline-danger">Nuevo Viaje</button>
+      <button id="btnResetCurrent" class="btn btn-outline-danger">Reiniciar Actual</button>
     </footer>
   </div>
 

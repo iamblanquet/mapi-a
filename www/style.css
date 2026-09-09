@@ -116,6 +116,156 @@ body {
   60% { transform: translateY(-2px); }
 }
 
+/* Navegación por pestañas */
+.nav-tabs {
+  display: flex;
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 4px;
+  gap: 4px;
+}
+
+.nav-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.nav-tab:hover {
+  color: white;
+}
+
+.nav-tab.active {
+  background-color: var(--primary);
+  color: white;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+}
+
+/* Banner de inspección de viaje histórico */
+.trip-inspect-banner {
+  background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+  color: white;
+  border-radius: 10px;
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.banner-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.banner-info span {
+  font-size: 0.75rem;
+  opacity: 0.85;
+}
+
+.banner-info strong {
+  font-size: 0.95rem;
+}
+
+.btn-sm {
+  padding: 6px 10px !important;
+  font-size: 0.75rem !important;
+}
+
+/* Historial de Viajes */
+.history-header-card {
+  margin-bottom: 12px;
+}
+
+.history-desc {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.trips-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.trip-card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.2s;
+}
+
+.trip-card:hover {
+  border-color: var(--primary);
+}
+
+.trip-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.trip-card-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.trip-card-date {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.trip-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.trip-stat-badge {
+  background-color: #0f172a;
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  color: #cbd5e1;
+}
+
+.trip-stat-badge strong {
+  color: #38bdf8;
+}
+
+.trip-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.trip-card-actions .btn {
+  flex: 1;
+  padding: 8px;
+  font-size: 0.8rem;
+}
+
 /* Controls */
 .controls-card {
   display: grid;
