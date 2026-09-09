@@ -1,5 +1,290 @@
 [
   {
+    "id": "trip-itz-noviadelmar-real-2026",
+    "name": "ITZ Oil & Gas (Ofic. Admin.) a La Novia del Mar",
+    "startTime": "2026-09-09T15:40:00.000Z",
+    "endTime": "2026-09-09T15:55:39.000Z",
+    "distanceKm": 3.83,
+    "pointsCount": 32,
+    "stopsCount": 2,
+    "deviceId": "pwa-itz-campeche",
+    "updatedAt": "2026-09-09T22:14:04.069Z",
+    "points": [
+      {
+        "latitude": 19.836495,
+        "longitude": -90.517489,
+        "accuracy": 12,
+        "speed": 0,
+        "isBackground": false,
+        "timestamp": "2026-09-09T15:40:00.000Z"
+      },
+      {
+        "latitude": 19.836831,
+        "longitude": -90.516988,
+        "accuracy": 15,
+        "speed": 33,
+        "isBackground": false,
+        "timestamp": "2026-09-09T15:40:30.000Z"
+      },
+      {
+        "latitude": 19.837745,
+        "longitude": -90.516931,
+        "accuracy": 18,
+        "speed": 36,
+        "isBackground": false,
+        "timestamp": "2026-09-09T15:40:59.000Z"
+      },
+      {
+        "latitude": 19.838594,
+        "longitude": -90.517572,
+        "accuracy": 14,
+        "speed": 39,
+        "isBackground": false,
+        "timestamp": "2026-09-09T15:41:31.000Z"
+      },
+      {
+        "latitude": 19.839254,
+        "longitude": -90.517135,
+        "accuracy": 9,
+        "speed": 42,
+        "isBackground": false,
+        "timestamp": "2026-09-09T15:41:59.000Z"
+      },
+      {
+        "latitude": 19.839875,
+        "longitude": -90.516346,
+        "accuracy": 11,
+        "speed": 30,
+        "isBackground": false,
+        "timestamp": "2026-09-09T15:42:30.000Z"
+      },
+      {
+        "latitude": 19.840864,
+        "longitude": -90.516871,
+        "accuracy": 16,
+        "speed": 33,
+        "isBackground": true,
+        "timestamp": "2026-09-09T15:43:03.000Z"
+      },
+      {
+        "latitude": 19.841591,
+        "longitude": -90.517918,
+        "accuracy": 17,
+        "speed": 36,
+        "isBackground": true,
+        "timestamp": "2026-09-09T15:43:32.000Z"
+      },
+      {
+        "latitude": 19.842428,
+        "longitude": -90.518373,
+        "accuracy": 13,
+        "speed": 39,
+        "isBackground": true,
+        "timestamp": "2026-09-09T15:44:02.000Z"
+      },
+      {
+        "latitude": 19.843596,
+        "longitude": -90.518726,
+        "accuracy": 8,
+        "speed": 0,
+        "isBackground": true,
+        "timestamp": "2026-09-09T15:44:34.000Z"
+      },
+      {
+        "latitude": 19.844656,
+        "longitude": -90.519016,
+        "accuracy": 10,
+        "speed": 30,
+        "isBackground": true,
+        "timestamp": "2026-09-09T15:45:02.000Z"
+      },
+      {
+        "latitude": 19.845664,
+        "longitude": -90.519076,
+        "accuracy": 15,
+        "speed": 33,
+        "isBackground": true,
+        "timestamp": "2026-09-09T15:45:33.000Z"
+      },
+      {
+        "latitude": 19.846946,
+        "longitude": -90.519372,
+        "accuracy": 19,
+        "speed": 36,
+        "isBackground": true,
+        "timestamp": "2026-09-09T15:46:02.000Z"
+      },
+      {
+        "latitude": 19.847879,
+        "longitude": -90.519824,
+        "accuracy": 14,
+        "speed": 39,
+        "isBackground": true,
+        "timestamp": "2026-09-09T15:46:36.000Z"
+      },
+      {
+        "latitude": 19.848942,
+        "longitude": -90.519842,
+        "accuracy": 12,
+        "speed": 42,
+        "isBackground": true,
+        "timestamp": "2026-09-09T15:47:06.000Z"
+      },
+      {
+        "latitude": 19.850045,
+        "longitude": -90.520427,
+        "accuracy": 9,
+        "speed": 30,
+        "isBackground": true,
+        "timestamp": "2026-09-09T15:47:34.000Z"
+      },
+      {
+        "latitude": 19.8508,
+        "longitude": -90.521253,
+        "accuracy": 14,
+        "speed": 33,
+        "isBackground": true,
+        "timestamp": "2026-09-09T15:48:06.000Z"
+      },
+      {
+        "latitude": 19.851736,
+        "longitude": -90.521673,
+        "accuracy": 16,
+        "speed": 36,
+        "isBackground": true,
+        "timestamp": "2026-09-09T15:48:37.000Z"
+      },
+      {
+        "latitude": 19.852922,
+        "longitude": -90.522265,
+        "accuracy": 18,
+        "speed": 39,
+        "isBackground": true,
+        "timestamp": "2026-09-09T15:49:06.000Z"
+      },
+      {
+        "latitude": 19.853758,
+        "longitude": -90.522767,
+        "accuracy": 13,
+        "speed": 42,
+        "isBackground": true,
+        "timestamp": "2026-09-09T15:49:36.000Z"
+      },
+      {
+        "latitude": 19.854428,
+        "longitude": -90.523304,
+        "accuracy": 11,
+        "speed": 0,
+        "isBackground": true,
+        "timestamp": "2026-09-09T15:50:09.000Z"
+      },
+      {
+        "latitude": 19.854886,
+        "longitude": -90.524553,
+        "accuracy": 15,
+        "speed": 33,
+        "isBackground": true,
+        "timestamp": "2026-09-09T15:50:37.000Z"
+      },
+      {
+        "latitude": 19.854655,
+        "longitude": -90.52571,
+        "accuracy": 17,
+        "speed": 36,
+        "isBackground": true,
+        "timestamp": "2026-09-09T15:51:08.000Z"
+      },
+      {
+        "latitude": 19.855232,
+        "longitude": -90.526375,
+        "accuracy": 12,
+        "speed": 39,
+        "isBackground": true,
+        "timestamp": "2026-09-09T15:51:38.000Z"
+      },
+      {
+        "latitude": 19.856167,
+        "longitude": -90.527028,
+        "accuracy": 8,
+        "speed": 42,
+        "isBackground": false,
+        "timestamp": "2026-09-09T15:52:07.000Z"
+      },
+      {
+        "latitude": 19.85564,
+        "longitude": -90.528078,
+        "accuracy": 10,
+        "speed": 46,
+        "isBackground": false,
+        "timestamp": "2026-09-09T15:52:39.000Z"
+      },
+      {
+        "latitude": 19.855385,
+        "longitude": -90.529096,
+        "accuracy": 14,
+        "speed": 48,
+        "isBackground": false,
+        "timestamp": "2026-09-09T15:53:09.000Z"
+      },
+      {
+        "latitude": 19.855034,
+        "longitude": -90.530403,
+        "accuracy": 15,
+        "speed": 44,
+        "isBackground": false,
+        "timestamp": "2026-09-09T15:53:37.000Z"
+      },
+      {
+        "latitude": 19.854501,
+        "longitude": -90.531393,
+        "accuracy": 13,
+        "speed": 46,
+        "isBackground": false,
+        "timestamp": "2026-09-09T15:54:08.000Z"
+      },
+      {
+        "latitude": 19.854148,
+        "longitude": -90.532413,
+        "accuracy": 11,
+        "speed": 48,
+        "isBackground": false,
+        "timestamp": "2026-09-09T15:54:37.000Z"
+      },
+      {
+        "latitude": 19.853485,
+        "longitude": -90.533511,
+        "accuracy": 9,
+        "speed": 44,
+        "isBackground": false,
+        "timestamp": "2026-09-09T15:55:09.000Z"
+      },
+      {
+        "latitude": 19.852696,
+        "longitude": -90.534308,
+        "accuracy": 8,
+        "speed": 0,
+        "isBackground": false,
+        "timestamp": "2026-09-09T15:55:39.000Z"
+      }
+    ],
+    "stops": [
+      {
+        "id": "stop-colosio-1788992044069",
+        "latitude": 19.843596,
+        "longitude": -90.518726,
+        "timestamp": "2026-09-09T15:44:34.000Z",
+        "note": "Semáforo Av. Colosio y Héroe de Nacozari"
+      },
+      {
+        "id": "stop-madero-1788992044069",
+        "latitude": 19.854428,
+        "longitude": -90.523304,
+        "timestamp": "2026-09-09T15:50:09.000Z",
+        "note": "OXXO y Farmacia Av. Francisco I. Madero"
+      }
+    ]
+  },
+  {
     "id": "trip-campeche-peru-noviadelmar-demo",
     "name": "Calle Perú a La Novia del Mar (Campeche)",
     "startTime": "2026-09-09T15:10:00.000Z",

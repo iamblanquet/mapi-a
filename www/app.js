@@ -1541,12 +1541,13 @@ btnSnapToRoads.addEventListener('click', async () => {
 });
 
 // Algoritmo de consulta a OSRM (Map Matching / Routing) por lotes de waypoints
+// Algoritmo de consulta a OSRM (Map Matching / Routing) por lotes de waypoints optimizado
 async function fetchSnappedRoadGeometry(gpsPoints) {
   if (!navigator.onLine) {
     throw new Error('Se requiere conexión a internet para consultar la cartografía de calles.');
   }
 
-  // Filtrar puntos redundantes muy cercanos (< 5 metros) para optimizar la petición OSRM
+  // Filtrar micro-ruido estático mientras el vehículo está detenido (< 8 metros)
   const sampledPoints = [];
   gpsPoints.forEach(pt => {
     if (sampledPoints.length === 0) {
@@ -1554,36 +1555,40 @@ async function fetchSnappedRoadGeometry(gpsPoints) {
     } else {
       const last = sampledPoints[sampledPoints.length - 1];
       const dist = calculateDistanceBetweenKm(last.latitude, last.longitude, pt.latitude, pt.longitude);
-      if (dist >= 0.005) { // al menos 5 metros
+      // Mantener puntos con separación mínima de 8 metros o cambios significativos
+      if (dist >= 0.008 || (pt.speed > 0 && last.speed === 0)) {
         sampledPoints.push(pt);
       }
     }
   });
 
-  // Si son muy pocos, usar los puntos originales
+  // Asegurar siempre incluir el primer y último punto exactos
+  if (sampledPoints[0] !== gpsPoints[0]) sampledPoints.unshift(gpsPoints[0]);
+  if (sampledPoints[sampledPoints.length - 1] !== gpsPoints[gpsPoints.length - 1]) {
+    sampledPoints.push(gpsPoints[gpsPoints.length - 1]);
+  }
+
   const targetPoints = sampledPoints.length >= 2 ? sampledPoints : gpsPoints;
 
-  // OSRM acepta hasta 90-100 coordenadas por petición en su API pública
-  // Si el viaje es largo, dividimos en trozos (chunks) de 60 coordenadas con solapamiento
-  const CHUNK_SIZE = 60;
+  // El servidor público de OSRM limita match a un máximo de 10 waypoints por petición.
+  // Usamos chunks de 8 puntos con solapamiento de 1 punto para costura perfecta.
+  const CHUNK_SIZE = 8;
   const fullGeometry = [];
 
   for (let i = 0; i < targetPoints.length - 1; i += (CHUNK_SIZE - 1)) {
     const chunk = targetPoints.slice(i, i + CHUNK_SIZE);
     if (chunk.length < 2) break;
 
-    const coordsStr = chunk.map(p => `${p.longitude.toFixed(6)},${p.latitude.toFixed(6)}`).join(';');
-    
-    // 1. Intentar primero con el servicio Match (Map Matching con timestamps y radios)
-    let chunkCoords = await requestOsrmMatch(coordsStr);
+    // 1. Intentar con Map Matching usando radios de búsqueda dinámicos y timestamps reales
+    let chunkCoords = await requestOsrmMatch(chunk);
 
-    // 2. Si Match falla o no encuentra coincidencia exacta, usar servicio Route
+    // 2. Si Match no halla coincidencia exacta en ese tramo, usar Routing inteligente
     if (!chunkCoords || chunkCoords.length === 0) {
-      chunkCoords = await requestOsrmRoute(coordsStr);
+      chunkCoords = await requestOsrmRoute(chunk);
     }
 
     if (chunkCoords && chunkCoords.length > 0) {
-      // Evitar duplicar el punto de unión entre chunks
+      // Evitar duplicar el punto de unión entre bloques consecutivos
       if (fullGeometry.length > 0 && chunkCoords.length > 0) {
         chunkCoords.shift();
       }
@@ -1594,29 +1599,43 @@ async function fetchSnappedRoadGeometry(gpsPoints) {
   return fullGeometry;
 }
 
-async function requestOsrmMatch(coordsStr) {
+// Map Matching (HMM) con radiuses adaptativos y marcas de tiempo
+async function requestOsrmMatch(chunk) {
   try {
-    const url = `https://router.project-osrm.org/match/v1/driving/${coordsStr}?overview=full&geometries=geojson&gaps=ignore&tidy=true`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(9000) });
+    const coordsStr = chunk.map(p => `${p.longitude.toFixed(6)},${p.latitude.toFixed(6)}`).join(';');
+    const radiuses = chunk.map(p => Math.min(35, Math.max(18, Math.round((p.accuracy || 15) * 1.5)))).join(';');
+    const timestamps = chunk.map(p => Math.floor(new Date(p.timestamp).getTime() / 1000)).join(';');
+
+    const url = `https://router.project-osrm.org/match/v1/driving/${coordsStr}?overview=full&geometries=geojson&gaps=ignore&tidy=true&radiuses=${radiuses}&timestamps=${timestamps}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return null;
     const data = await res.json();
     if (data.code === 'Ok' && data.matchings && data.matchings.length > 0) {
       const coords = [];
       data.matchings.forEach(m => {
         if (m.geometry && m.geometry.coordinates) {
-          m.geometry.coordinates.forEach(c => coords.push([c[1], c[0]])); // GeoJSON es [lng, lat] -> Leaflet es [lat, lng]
+          m.geometry.coordinates.forEach(c => coords.push([c[1], c[0]])); // GeoJSON [lng, lat] -> Leaflet [lat, lng]
         }
       });
       return coords;
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn('OSRM Match warning:', e);
+  }
   return null;
 }
 
-async function requestOsrmRoute(coordsStr) {
+// Fallback de Routing fluido sin giros en U absurdos
+async function requestOsrmRoute(chunk) {
   try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${coordsStr}?overview=full&geometries=geojson&continue_straight=default`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(9000) });
+    // Si el chunk tiene varios puntos, tomar inicio, punto medio y fin para trazar la vía vehicular continua
+    const routeWaypoints = chunk.length <= 3 
+      ? chunk 
+      : [chunk[0], chunk[Math.floor(chunk.length / 2)], chunk[chunk.length - 1]];
+
+    const coordsStr = routeWaypoints.map(p => `${p.longitude.toFixed(6)},${p.latitude.toFixed(6)}`).join(';');
+    const url = `https://router.project-osrm.org/route/v1/driving/${coordsStr}?overview=full&geometries=geojson&continue_straight=true`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return null;
     const data = await res.json();
     if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
@@ -1625,7 +1644,9 @@ async function requestOsrmRoute(coordsStr) {
         return routeGeom.coordinates.map(c => [c[1], c[0]]);
       }
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn('OSRM Route warning:', e);
+  }
   return null;
 }
 
