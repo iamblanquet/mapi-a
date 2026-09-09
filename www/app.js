@@ -187,15 +187,22 @@ function switchTab(tab) {
     sectionLiveView.classList.remove('hidden');
     sectionHistoryView.classList.add('hidden');
     if (map) {
-      setTimeout(() => map.invalidateSize(), 200);
+      setTimeout(() => map.invalidateSize(), 150);
     }
   } else {
     tabBtnHistory.classList.add('active');
     tabBtnLive.classList.remove('active');
     sectionHistoryView.classList.remove('hidden');
     sectionLiveView.classList.add('hidden');
+    if (map) {
+      setTimeout(() => map.invalidateSize(), 150);
+    }
   }
 }
+
+window.addEventListener('resize', () => {
+  if (map) map.invalidateSize();
+});
 
 // ----------------------------------------------------------------------------
 // Inicialización del Mapa Leaflet

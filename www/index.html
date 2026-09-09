@@ -64,211 +64,247 @@
     </div>
   </div>
 
-  <div class="app-container">
-    <header class="app-header">
-      <div class="header-title">
-        <span class="pulse-icon" id="pulseIndicator"></span>
-        <h1>GPS Tracker & Trips</h1>
+  <div class="app-layout">
+    <!-- BARRA SUPERIOR PREMIUM (Header Global) -->
+    <header class="app-header-bar">
+      <div class="header-brand">
+        <div class="brand-logo">
+          <span class="pulse-icon" id="pulseIndicator"></span>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="brand-svg">
+            <polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>Mapi GPS <span class="brand-badge">PRO</span></h1>
+          <p class="brand-sub">Dashboard & Rastreo Satelital</p>
+        </div>
       </div>
-      <div class="header-badges">
-        <button id="btnInstallPwa" class="badge pwa-install hidden">📲 Instalar</button>
-        <span class="badge badge-pulse" id="liveTag">Offline</span>
+
+      <!-- Pestañas de Navegación -->
+      <nav class="nav-tabs-header">
+        <button id="tabBtnLive" class="nav-tab active">
+          <span class="tab-indicator live"></span>
+          <span>🔴 Grabador en Vivo</span>
+        </button>
+        <button id="tabBtnHistory" class="nav-tab">
+          <span>📁 Historial de Viajes</span>
+          <span class="tab-badge" id="tabHistoryCount">0</span>
+        </button>
+      </nav>
+
+      <div class="header-status-actions">
+        <button id="btnInstallPwa" class="badge pwa-install hidden">📲 Instalar App</button>
+        <div class="connection-status-pill">
+          <span class="conn-dot"></span>
+          <span id="liveTag">Online</span>
+        </div>
       </div>
     </header>
 
-    <!-- Barra de Pestañas de Navegación -->
-    <nav class="nav-tabs">
-      <button id="tabBtnLive" class="nav-tab active">🔴 Grabador en Vivo</button>
-      <button id="tabBtnHistory" class="nav-tab">📁 Historial de Viajes (<span id="tabHistoryCount">0</span>)</button>
-    </nav>
-
-    <!-- Banner de Notificación de Inspección de Viaje Histórico -->
-    <div id="viewingTripBanner" class="trip-inspect-banner hidden">
-      <div class="banner-info">
-        <span>Mostrando viaje guardado:</span>
-        <strong id="viewingTripTitle">Nombre del Viaje</strong>
-      </div>
-      <div class="banner-actions">
-        <button id="btnSnapToRoads" class="btn btn-snap-road btn-sm" title="Ajustar la trayectoria siguiendo exactamente las calles">
-          🛣️ Ajustar a Calles
-        </button>
-        <button id="btnExitTripView" class="btn btn-secondary btn-sm">Volver a En Vivo</button>
-      </div>
-    </div>
-
-    <!-- SECCIÓN 1: VISTA EN VIVO Y MAPA -->
-    <div id="sectionLiveView">
-      <!-- Controles Principales -->
-      <section class="controls-card">
-        <button id="btnStart" class="btn btn-primary btn-large">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-          Iniciar Viaje
-        </button>
-        <button id="btnStop" class="btn btn-danger btn-large" disabled>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12"></rect></svg>
-          Finalizar
-        </button>
-        <button id="btnOpenStopModal" class="btn btn-warning btn-large" disabled>
-          📍 Parada
-        </button>
-      </section>
-
-      <!-- Barra de Accesos Rápidos -->
-      <div class="quick-actions">
-        <button id="btnEnterPocket" class="btn btn-pocket" disabled>
-          🕶️ Modo Bolsillo (OLED)
-        </button>
-        <button id="btnCenterMap" class="btn btn-secondary btn-icon-only" title="Centrar Mapa">
-          🎯 Centrar
-        </button>
-        <button id="btnFitMap" class="btn btn-secondary btn-icon-only" title="Ajustar Recorrido">
-          🗺️ Ajustar
-        </button>
-      </div>
-
-      <!-- Dashboard de Métricas en Vivo -->
-      <section class="grid-metrics dashboard-metrics">
-        <div class="metric-card">
-          <span class="metric-label">Distancia</span>
-          <span class="metric-value" id="valDistance">0.00 km</span>
-        </div>
-        <div class="metric-card">
-          <span class="metric-label">Tiempo</span>
-          <span class="metric-value" id="valDuration">00:00:00</span>
-        </div>
-        <div class="metric-card">
-          <span class="metric-label">Velocidad</span>
-          <span class="metric-value" id="valSpeed">0 km/h</span>
-        </div>
-        <div class="metric-card">
-          <span class="metric-label">Paradas</span>
-          <span class="metric-value text-warning" id="valStopsCount">0</span>
-        </div>
-      </section>
-
-      <!-- Visor del Mapa Leaflet -->
-      <section class="card map-card">
-        <div class="card-header">
-          <h2 id="mapHeading">Recorrido del Viaje</h2>
-          <span class="status-indicator" id="mapStatusText">Esperando GPS</span>
-        </div>
-        <div class="map-legend-bar">
-          <span class="legend-item"><span class="legend-dot dot-screen-on"></span> Pantalla encendida</span>
-          <span class="legend-item"><span class="legend-dot dot-screen-off"></span> Pantalla bloqueada / Segundo plano</span>
-          <span id="roadSnapBadge" class="legend-item road-badge hidden"><span class="legend-dot dot-road"></span> Ajustado a Calles</span>
-        </div>
-        <div id="tripMap" class="map-viewport"></div>
-      </section>
-
-      <!-- Lista de Paradas del Viaje en Curso -->
-      <section class="card stops-card" id="stopsSection">
-        <div class="card-header">
-          <h2>Paradas Registradas (<span id="stopsTotalBadge">0</span>)</h2>
-        </div>
-        <div class="stops-list" id="stopsList">
-          <p class="empty-text">No has registrado paradas en este viaje.</p>
-        </div>
-      </section>
-
-      <!-- Estado y Señal GPS -->
-      <section class="card stats-card">
-        <div class="stat-row">
-          <span>Próxima Captura (20s):</span>
-          <strong id="nextCaptureCountdown" class="text-highlight">--</strong>
-        </div>
-        <div class="stat-row">
-          <span>Calidad GPS:</span>
-          <strong id="gpsQualityText" class="text-muted">Esperando señal</strong>
-        </div>
-        <div class="stat-row">
-          <span>Puntos Grabados:</span>
-          <strong id="pointsCount">0</strong>
-        </div>
-        <div class="stat-row">
-          <span>Última Coordenada:</span>
-          <span id="lastCoordText">--.------, --.------</span>
-        </div>
-      </section>
-    </div>
-
-    <!-- SECCIÓN 2: HISTORIAL DE VIAJES -->
-    <div id="sectionHistoryView" class="hidden">
-      <div class="card history-header-card">
-        <div class="card-header">
-          <h2>Viajes Guardados</h2>
-          <button id="btnRefreshTrips" class="btn-text">🔄 Actualizar</button>
-        </div>
-        <p class="history-desc">Aquí se almacenan los viajes que has realizado. Puedes tocar cualquiera para abrirlo en el mapa y ver su trazado y paradas.</p>
-      </div>
-
-      <div class="trips-container" id="tripsContainer">
-        <p class="empty-text">Cargando historial de viajes...</p>
-      </div>
-    </div>
-
-    <!-- Configuración del Servidor y Audio Hack (Colapsable) -->
-    <details class="card config-details">
-      <summary class="config-summary">⚙️ Configuración del Servidor y Audio Hack</summary>
-      <div class="config-body">
-        <div class="input-group">
-          <label for="serverUrl">URL del Servidor (Render):</label>
-          <div class="input-row">
-            <input type="url" id="serverUrl" placeholder="https://tu-app.onrender.com" />
-            <button id="btnTestServer" class="btn btn-secondary">Probar</button>
-          </div>
-          <span class="status-indicator" id="serverStatus">Verificando...</span>
-        </div>
+    <!-- CUERPO PRINCIPAL EN 2 COLUMNAS (ESCRITORIO) -->
+    <main class="dashboard-grid">
+      
+      <!-- COLUMNA IZQUIERDA: Panel de Controles, Métricas, Paradas e Historial -->
+      <aside class="sidebar-panel">
         
-        <div class="settings-grid">
-          <div class="input-group">
-            <label for="intervalSelect">Intervalo:</label>
-            <select id="intervalSelect" class="form-select">
-              <option value="10">Cada 10 segundos</option>
-              <option value="20" selected>Cada 20 segundos (Recomendado)</option>
-              <option value="30">Cada 30 segundos</option>
-              <option value="60">Cada 60 segundos</option>
-            </select>
+        <!-- Banner de Notificación de Inspección de Viaje Histórico -->
+        <div id="viewingTripBanner" class="trip-inspect-banner hidden">
+          <div class="banner-info">
+            <span>Inspeccionando viaje guardado:</span>
+            <strong id="viewingTripTitle">Nombre del Viaje</strong>
           </div>
-          <div class="input-group">
-            <label>Modo de guardado:</label>
-            <div class="form-select" style="display: flex; align-items: center; color: #4ade80; font-weight: 600;">
-              ✅ 100% de puntos (Sin descartes)
+          <div class="banner-actions">
+            <button id="btnSnapToRoads" class="btn btn-snap-road btn-sm" title="Ajustar la trayectoria siguiendo exactamente las calles">
+              🛣️ Ajustar a Calles
+            </button>
+            <button id="btnExitTripView" class="btn btn-secondary btn-sm">✕ Volver a En Vivo</button>
+          </div>
+        </div>
+
+        <!-- SECCIÓN 1: VISTA EN VIVO (CONTROLES Y MÉTRICAS) -->
+        <div id="sectionLiveView" class="panel-section">
+          <!-- Controles Principales -->
+          <section class="controls-card">
+            <button id="btnStart" class="btn btn-primary btn-large">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+              <span>Iniciar Viaje</span>
+            </button>
+            <button id="btnStop" class="btn btn-danger btn-large" disabled>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="6" y="6" width="12" height="12"></rect></svg>
+              <span>Finalizar</span>
+            </button>
+            <button id="btnOpenStopModal" class="btn btn-warning btn-large" disabled>
+              <span>📍 Parada</span>
+            </button>
+          </section>
+
+          <!-- Barra de Accesos Rápidos -->
+          <div class="quick-actions">
+            <button id="btnEnterPocket" class="btn btn-pocket" disabled>
+              🕶️ Modo Bolsillo (OLED)
+            </button>
+            <button id="btnCenterMap" class="btn btn-secondary" title="Centrar Mapa en mi posición">
+              🎯 Centrar
+            </button>
+            <button id="btnFitMap" class="btn btn-secondary" title="Ajustar Recorrido Completo">
+              🗺️ Ajustar
+            </button>
+          </div>
+
+          <!-- Métricas de Telemetría en Vivo -->
+          <section class="grid-metrics dashboard-metrics">
+            <div class="metric-card">
+              <span class="metric-label">Distancia</span>
+              <span class="metric-value" id="valDistance">0.00 km</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Tiempo</span>
+              <span class="metric-value text-accent" id="valDuration">00:00:00</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Velocidad</span>
+              <span class="metric-value" id="valSpeed">0 km/h</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Paradas</span>
+              <span class="metric-value text-warning" id="valStopsCount">0</span>
+            </div>
+          </section>
+
+          <!-- Lista de Paradas del Viaje en Curso -->
+          <section class="card stops-card" id="stopsSection">
+            <div class="card-header">
+              <h2>📍 Paradas Registradas (<span id="stopsTotalBadge">0</span>)</h2>
+            </div>
+            <div class="stops-list" id="stopsList">
+              <p class="empty-text">No has registrado paradas en este viaje.</p>
+            </div>
+          </section>
+
+          <!-- Estado y Señal GPS -->
+          <section class="card stats-card">
+            <div class="stat-row">
+              <span>Próxima Captura (20s):</span>
+              <strong id="nextCaptureCountdown" class="text-highlight">--</strong>
+            </div>
+            <div class="stat-row">
+              <span>Calidad GPS:</span>
+              <strong id="gpsQualityText" class="text-muted">Esperando señal</strong>
+            </div>
+            <div class="stat-row">
+              <span>Puntos Grabados:</span>
+              <strong id="pointsCount">0</strong>
+            </div>
+            <div class="stat-row">
+              <span>Última Coordenada:</span>
+              <span id="lastCoordText" class="mono-text">--.------, --.------</span>
+            </div>
+          </section>
+        </div>
+
+        <!-- SECCIÓN 2: HISTORIAL DE VIAJES (LISTA) -->
+        <div id="sectionHistoryView" class="panel-section hidden">
+          <div class="card history-header-card">
+            <div class="card-header">
+              <h2>📁 Viajes Guardados</h2>
+              <button id="btnRefreshTrips" class="btn-text">🔄 Actualizar</button>
+            </div>
+            <p class="history-desc">Selecciona un viaje para trazarlo en el visor grande de la derecha.</p>
+          </div>
+
+          <div class="trips-container" id="tripsContainer">
+            <p class="empty-text">Cargando historial de viajes...</p>
+          </div>
+        </div>
+
+        <!-- Configuración del Servidor y Audio Hack (Colapsable) -->
+        <details class="card config-details">
+          <summary class="config-summary">⚙️ Configuración y Motor de Fondo</summary>
+          <div class="config-body">
+            <div class="input-group">
+              <label for="serverUrl">Servidor de Sincronización (Render):</label>
+              <div class="input-row">
+                <input type="url" id="serverUrl" placeholder="https://tu-app.onrender.com" />
+                <button id="btnTestServer" class="btn btn-secondary">Probar</button>
+              </div>
+              <span class="status-indicator" id="serverStatus">Verificando...</span>
+            </div>
+            
+            <div class="settings-grid">
+              <div class="input-group">
+                <label for="intervalSelect">Intervalo:</label>
+                <select id="intervalSelect" class="form-select">
+                  <option value="10">Cada 10 segundos</option>
+                  <option value="20" selected>Cada 20 segundos (Recomendado)</option>
+                  <option value="30">Cada 30 segundos</option>
+                  <option value="60">Cada 60 segundos</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label>Modo de guardado:</label>
+                <div class="form-select status-tag-ok">
+                  ✅ 100% de puntos (Sin descartes)
+                </div>
+              </div>
+            </div>
+
+            <label class="checkbox-container">
+              <input type="checkbox" id="syncWithServer" checked>
+              <span>Sincronizar viajes y paradas con Render</span>
+            </label>
+            <label class="checkbox-container audio-hack-container">
+              <input type="checkbox" id="useAudioHack" checked>
+              <strong>🔊 Motor Web Audio API (Segundo plano con pantalla bloqueada)</strong>
+            </label>
+            <label class="checkbox-container">
+              <input type="checkbox" id="useWakeLock">
+              <span>Mantener pantalla encendida (Screen Wake Lock)</span>
+            </label>
+          </div>
+        </details>
+
+        <!-- Registro de Eventos (Consola en Vivo) -->
+        <details class="card log-card">
+          <summary class="config-summary">📝 Bitácora de Eventos (<span id="logCount">0</span>)</summary>
+          <div class="card-header" style="margin-top: 10px;">
+            <button id="btnClearLog" class="btn-text">Limpiar</button>
+          </div>
+          <div class="log-terminal" id="logConsole">
+            <div class="log-entry log-system">[PWA] Sistema listo. Presiona "Iniciar Viaje".</div>
+          </div>
+        </details>
+
+        <!-- Acciones de Datos -->
+        <footer class="app-footer">
+          <button id="btnExportJson" class="btn btn-outline">Exportar JSON</button>
+          <button id="btnExportCsv" class="btn btn-outline">Exportar CSV</button>
+          <button id="btnResetCurrent" class="btn btn-outline-danger">Reiniciar</button>
+        </footer>
+      </aside>
+
+      <!-- COLUMNA DERECHA: Visor del Mapa Leaflet en Grandote -->
+      <section class="map-view-column">
+        <div class="map-container-card">
+          <div class="map-top-bar">
+            <div class="map-title-group">
+              <h2 id="mapHeading">Recorrido del Viaje</h2>
+              <span class="status-indicator live-pill" id="mapStatusText">Esperando GPS</span>
+            </div>
+
+            <!-- Leyenda Visual Interactiva -->
+            <div class="map-legend-bar">
+              <span class="legend-item"><span class="legend-dot dot-screen-on"></span> Pantalla encendida</span>
+              <span class="legend-item"><span class="legend-dot dot-screen-off"></span> Pantalla bloqueada / Segundo plano</span>
+              <span id="roadSnapBadge" class="legend-item road-badge hidden"><span class="legend-dot dot-road"></span> Ajustado a Calles (OSRM)</span>
             </div>
           </div>
+
+          <!-- Lienzo del Mapa (Ocupa todo el alto en pantalla grande) -->
+          <div id="tripMap" class="map-viewport-desktop"></div>
         </div>
+      </section>
 
-        <label class="checkbox-container">
-          <input type="checkbox" id="syncWithServer" checked>
-          <span>Sincronizar viajes y paradas con Render</span>
-        </label>
-        <label class="checkbox-container audio-hack-container">
-          <input type="checkbox" id="useAudioHack" checked>
-          <strong>🔊 Audio Loop Hack (Permite segundo plano con pantalla bloqueada)</strong>
-        </label>
-        <label class="checkbox-container">
-          <input type="checkbox" id="useWakeLock">
-          <span>Mantener pantalla encendida (Screen Wake Lock)</span>
-        </label>
-      </div>
-    </details>
-
-    <!-- Registro de Eventos (Consola en Vivo) -->
-    <details class="card log-card">
-      <summary class="config-summary">📝 Bitácora de Eventos (<span id="logCount">0</span>)</summary>
-      <div class="card-header" style="margin-top: 10px;">
-        <button id="btnClearLog" class="btn-text">Limpiar</button>
-      </div>
-      <div class="log-terminal" id="logConsole">
-        <div class="log-entry log-system">[PWA] Sistema listo. Presiona "Iniciar Viaje".</div>
-      </div>
-    </details>
-
-    <!-- Acciones de Datos -->
-    <footer class="app-footer">
-      <button id="btnExportJson" class="btn btn-outline">Exportar JSON</button>
-      <button id="btnExportCsv" class="btn btn-outline">Exportar CSV</button>
-      <button id="btnResetCurrent" class="btn btn-outline-danger">Reiniciar Actual</button>
-    </footer>
+    </main>
   </div>
 
   <!-- Elemento de Audio Oculto para Segundo Plano -->
