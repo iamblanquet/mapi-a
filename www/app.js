@@ -1207,11 +1207,26 @@ async function loadTripsHistory() {
     tripsHistory = [];
   }
 
-  // Intentar sincronizar con Render si hay conexión
-  const url = serverUrlInput.value.trim();
-  if (url && syncWithServerCheckbox.checked) {
+  // Si no hay viajes en localStorage, cargar viaje de demostración inicial
+  if (!tripsHistory || tripsHistory.length === 0) {
     try {
-      const res = await fetch(`${url}/api/trips`, { signal: AbortSignal.timeout(4000) });
+      const demoRes = await fetch('./demo-trips.json');
+      if (demoRes.ok) {
+        const demoData = await demoRes.json();
+        if (Array.isArray(demoData) && demoData.length > 0) {
+          tripsHistory = demoData;
+          localStorage.setItem(STORAGE_TRIPS_HISTORY_KEY, JSON.stringify(tripsHistory));
+        }
+      }
+    } catch (e) {}
+  }
+
+  // Intentar sincronizar con Render / Servidor si hay conexión
+  const url = serverUrlInput.value.trim();
+  if (syncWithServerCheckbox.checked) {
+    try {
+      const fetchUrl = url ? `${url}/api/trips` : '/api/trips';
+      const res = await fetch(fetchUrl, { signal: AbortSignal.timeout(4000) });
       if (res.ok) {
         const data = await res.json();
         if (data.trips && Array.isArray(data.trips)) {
@@ -1294,19 +1309,36 @@ function renderTripsList() {
 async function viewTripOnMap(tripId) {
   let trip = tripsHistory.find(t => t.id === tripId);
 
-  // Si los puntos detallados no están en memoria local, descargarlos de Render
+  // Si los puntos detallados no están en memoria local, descargarlos del servidor o del demo
   if (!trip || !trip.points || trip.points.length === 0) {
     const url = serverUrlInput.value.trim();
-    if (url) {
-      try {
-        log(`Descargando datos completos del viaje ${tripId}...`, 'log-system');
-        const res = await fetch(`${url}/api/trips/${tripId}`);
-        if (res.ok) {
-          trip = await res.json();
-        }
-      } catch (e) {
-        console.warn(e);
+    const fetchUrl = url ? `${url}/api/trips/${tripId}` : `/api/trips/${tripId}`;
+    try {
+      log(`Descargando datos completos del viaje ${tripId}...`, 'log-system');
+      const res = await fetch(fetchUrl);
+      if (res.ok) {
+        trip = await res.json();
       }
+    } catch (e) {
+      console.warn(e);
+    }
+
+    // Si aún no tiene puntos, buscar en demo-trips.json
+    if (!trip || !trip.points || trip.points.length === 0) {
+      try {
+        const demoRes = await fetch('./demo-trips.json');
+        if (demoRes.ok) {
+          const demoTrips = await demoRes.json();
+          const found = demoTrips.find(t => t.id === tripId);
+          if (found && found.points) trip = found;
+        }
+      } catch (e) {}
+    }
+
+    if (trip && trip.points) {
+      const idx = tripsHistory.findIndex(t => t.id === tripId);
+      if (idx !== -1) tripsHistory[idx] = trip;
+      localStorage.setItem(STORAGE_TRIPS_HISTORY_KEY, JSON.stringify(tripsHistory.slice(0, 50)));
     }
   }
 
