@@ -1,6 +1,6 @@
-# GPS Tracker PWA (100% Web)
+# GPS Tracker PWA (100% Web) con Dashboard, Mapa y Paradas
 
-Aplicación Web Progresiva (**PWA pura**, sin necesidad de Android Studio ni Capacitor) para rastreo GPS de **súper precisión** con intervalo de **10 segundos**, sincronización en vivo con **Render** y soluciones para el problema de la suspensión en dispositivos móviles.
+Aplicación Web Progresiva (**PWA pura**, sin necesidad de Android Studio ni Capacitor) para rastreo GPS de **súper precisión** con intervalo de **20 segundos**, historial de viajes, mapa interactivo con **Leaflet.js**, registro de paradas y sincronización en vivo con **Render**.
 
 ---
 
@@ -11,52 +11,50 @@ Por políticas de ahorro de batería y privacidad en Android e iOS:
 * En cuanto la pantalla entra en reposo o se bloquea, el navegador **duerme los hilos de JavaScript**.
 * Los Service Workers de la web **no tienen acceso al hardware de geolocalización** por especificación de la W3C.
 
-### Las 3 soluciones implementadas en esta PWA:
+### Las soluciones implementadas en esta PWA:
 
-1. **Screen Wake Lock API (`navigator.wakeLock`):**
-   * Impide automáticamente que la pantalla se apague o entre en suspensión mientras la app está activa.
-   * El GPS continúa registrando coordenadas fijas cada **10 segundos** de forma continua.
-2. **Modo Bolsillo OLED (Ahorro de batería extremo):**
-   * Presiona el botón **"Modo Bolsillo"** en la app.
-   * La pantalla se vuelve **100% negra** (apagando físicamente los píxeles en pantallas OLED/AMOLED) para que no consuma batería y no sufra toques accidentales mientras caminas con el teléfono en el bolsillo, **sin que el móvil se suspenda**.
-3. **Audio Loop Hack (Segundo plano experimental):**
-   * Activa un oscilador Web Audio imperceptible para mantener activo el proceso de la pestaña cuando minimizas o cambias de app en algunos navegadores de Android.
+1. **Audio Loop Hack (Segundo plano con pantalla bloqueada):**
+   * Utiliza una sesión multimedia activa con `navigator.mediaSession` y un audio silencioso en bucle.
+   * El sistema operativo le da prioridad como reproductor de música y **no duerme el hilo de ejecución al apagar la pantalla**.
+   * El evento continuo `timeupdate` emite un latido ininterrumpido cada **20 segundos** para tomar y enviar las coordenadas.
+2. **Screen Wake Lock API (`navigator.wakeLock`):**
+   * Impide automáticamente que la pantalla se apague sola mientras la app está visible.
+3. **Modo Bolsillo OLED (Ahorro de batería extremo):**
+   * Pone la pantalla en **100% negro** (apagando físicamente los píxeles en pantallas OLED/AMOLED) para que no consuma batería mientras caminas con el teléfono en el bolsillo.
 
 ---
 
-## 🎯 Configuración de Máxima Precisión y Rango de 10s
+## 🎯 Configuración de Máxima Precisión y Rango de 20s
 
-* **Súper Precisión:** Se utiliza `enableHighAccuracy: true`, `maximumAge: 0` y un timeout estricto de 10 segundos para forzar la conexión directa con los satélites GPS.
-* **Filtro de Ruido:** Solo acepta lecturas con error inferior a 15 metros (configurable a 30m o 50m).
-* **Ventana de 10 Segundos:** Durante cada bloque de 10 segundos, el algoritmo evalúa las señales recibidas y **fija la coordenada con el menor margen de error**.
-* **Temporizador en Vivo:** Cuenta regresiva visual en pantalla (`10s... 9s... 8s...`) que marca exactamente cuándo se envía y almacena el siguiente punto.
+* **Súper Precisión:** Se utiliza `enableHighAccuracy: true`, `maximumAge: 0` y un filtro estricto (< 15 metros) para forzar la conexión directa con los satélites GPS.
+* **Ventana de 20 Segundos:** Durante cada bloque de 20 segundos, el algoritmo evalúa las señales recibidas y **fija la coordenada con el menor margen de error**.
+* **Temporizador en Vivo:** Cuenta regresiva visual en pantalla (`20s... 19s... 18s...`) que marca exactamente cuándo se envía y almacena el siguiente punto.
+
+---
+
+## 🗺️ Visualización de Viajes en el Mapa con Puntos de 20s
+
+* **Trazado de Ruta:** Línea continua que une todos los puntos del viaje.
+* **Puntos Individuales:** Cada coordenada capturada a los 20 segundos se pinta visiblemente como un marcador interactivo:
+  * 🟢 **Punto A:** Marcador de inicio del viaje con fecha y hora.
+  * 🔴 **Puntos Intermedios:** Círculos interactivos a lo largo de la ruta con popup que indica número de punto, hora, velocidad, precisión y si fue capturado con pantalla encendida o bloqueada.
+  * 🏁 **Punto B:** Marcador de finalización del viaje.
+  * 📍 **Pines de Paradas:** Marcadores amarillos con notas personalizadas (gasolinera, clientes, descansos, etc.).
 
 ---
 
 ## 🚀 Despliegue en Render (100% Gratuito y Rápido)
 
-1. Sube este proyecto a tu GitHub / GitLab:
+1. Sube este proyecto a tu repositorio de GitHub:
    ```bash
    git add .
-   git commit -m "feat: pwa gps tracker para render"
+   git commit -m "feat: gps pwa 20s y puntos en mapa de historial"
    git push origin main
    ```
 2. Entra a [dashboard.render.com](https://dashboard.render.com/) y crea un **Web Service**.
-3. Conecta tu repositorio.
-4. Render utilizará la configuración de `render.yaml` automáticamente:
+3. Conecta tu repositorio `iamblanquet/mapi-a`.
+4. Render detectará automáticamente `render.yaml`:
    * **Build Command:** `npm install`
    * **Start Command:** `npm start`
    * **Health Check Path:** `/health`
 5. Render generará tu enlace seguro HTTPS (ejemplo: `https://mi-pwa-gps.onrender.com`).
-   > *Nota:* La geolocalización en teléfonos exige HTTPS, y Render proporciona HTTPS automáticamente.
-
----
-
-## 📲 Cómo Usar e Instalar en tu Celular
-
-1. Abre el enlace de Render en **Google Chrome** (Android) o **Safari** (iOS).
-2. Presiona el botón verde **"📲 Instalar App"** o en el menú del navegador selecciona **"Agregar a la pantalla de inicio"**.
-3. Abre la app desde tu pantalla de inicio como una aplicación independiente.
-4. Presiona **"Iniciar Rastreo"** y autoriza el acceso a la ubicación.
-5. *(Opcional)* Activa el **Modo Bolsillo** para apagar la pantalla en negro y meter el teléfono al bolsillo sin que se apague el GPS.
-6. En tu computadora puedes abrir la misma URL para ver las coordenadas llegando en tiempo real o exportar el recorrido a CSV / JSON.

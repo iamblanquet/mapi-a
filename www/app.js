@@ -39,6 +39,7 @@ let routePolyline = null;
 let currentPositionMarker = null;
 let accuracyCircle = null;
 let stopsLayerGroup = null;
+let tripPointsLayerGroup = null;
 
 let deviceId = localStorage.getItem('gps_device_id');
 if (!deviceId) {
@@ -212,6 +213,7 @@ function initMap() {
   }).addTo(map);
 
   stopsLayerGroup = L.layerGroup().addTo(map);
+  tripPointsLayerGroup = L.layerGroup().addTo(map);
   redrawActiveMapData();
 }
 
@@ -551,7 +553,7 @@ function startAudioLoopHack() {
     if ('mediaSession' in navigator) {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: currentTripName || 'GPS Tracker - Grabando Viaje',
-        artist: 'Rastreo cada 10s en segundo plano',
+        artist: 'Rastreo cada 20s en segundo plano',
         album: 'Audio Loop Heartbeat'
       });
       navigator.mediaSession.playbackState = 'playing';
@@ -577,7 +579,7 @@ bgAudio.addEventListener('timeupdate', () => {
   if (!isTracking) return;
 
   const now = Date.now();
-  const targetIntervalMs = (parseInt(intervalSelect.value, 10) || 10) * 1000;
+  const targetIntervalMs = (parseInt(intervalSelect.value, 10) || 20) * 1000;
 
   if (now - lastCommittedTime >= targetIntervalMs) {
     if (bestCandidateInWindow) {
@@ -659,7 +661,7 @@ function handleIncomingPosition(pos) {
   }
 
   const now = Date.now();
-  const targetIntervalMs = (parseInt(intervalSelect.value, 10) || 10) * 1000;
+  const targetIntervalMs = (parseInt(intervalSelect.value, 10) || 20) * 1000;
 
   if (!bestCandidateInWindow || (accuracy && accuracy < (bestCandidateInWindow.accuracy || 999))) {
     bestCandidateInWindow = {
@@ -714,7 +716,7 @@ function commitPosition(record) {
   }
 
   const bgTag = record.isBackground ? ' [EN SEGUNDO PLANO / BLOQUEADO]' : '';
-  log(`🎯 Punto guardado (10s): ${record.latitude.toFixed(5)}, ${record.longitude.toFixed(5)} (±${record.accuracy}m)${bgTag}`, 
+  log(`🎯 Punto guardado (20s): ${record.latitude.toFixed(5)}, ${record.longitude.toFixed(5)} (±${record.accuracy}m)${bgTag}`, 
       record.isBackground ? 'log-bg' : 'log-gps');
 
   if (syncWithServerCheckbox.checked) {
@@ -770,7 +772,7 @@ function startTimers() {
 
   countdownTimer = setInterval(() => {
     if (!isTracking) return;
-    const intervalSec = parseInt(intervalSelect.value, 10) || 10;
+    const intervalSec = parseInt(intervalSelect.value, 10) || 20;
     const elapsedMs = Date.now() - lastCommittedTime;
     const remainingSec = Math.max(0, Math.ceil((intervalSec * 1000 - elapsedMs) / 1000));
     nextCaptureCountdown.textContent = `${remainingSec}s`;
@@ -1147,8 +1149,73 @@ async function viewTripOnMap(tripId) {
   if (routePolyline) {
     const latLngs = trip.points.map(p => [p.latitude, p.longitude]);
     routePolyline.setLatLngs(latLngs);
-    routePolyline.setStyle({ color: '#a855f7', weight: 6 }); // Color morado para viajes históricos
+    routePolyline.setStyle({ color: '#a855f7', weight: 5 }); // Color morado para viajes históricos
     map.fitBounds(routePolyline.getBounds(), { padding: [35, 35] });
+  }
+
+  // Pintar CADA PUNTO de ubicación individualmente a lo largo de la ruta (cada 20s)
+  if (tripPointsLayerGroup) {
+    tripPointsLayerGroup.clearLayers();
+    trip.points.forEach((p, idx) => {
+      const timeStr = new Date(p.timestamp).toLocaleTimeString();
+      const isFirst = (idx === 0);
+      const isLast = (idx === trip.points.length - 1 && trip.points.length > 1);
+
+      if (isFirst) {
+        const startIcon = L.divIcon({
+          className: 'point-start-marker',
+          html: '<div style="background:#22c55e; color:white; font-size:12px; font-weight:bold; border-radius:50%; width:26px; height:26px; display:flex; align-items:center; justify-content:center; border:2px solid white; box-shadow:0 0 8px rgba(34,197,94,0.7);">A</div>',
+          iconSize: [26, 26],
+          iconAnchor: [13, 13]
+        });
+        L.marker([p.latitude, p.longitude], { icon: startIcon })
+          .bindPopup(`
+            <div style="font-family: sans-serif; color: #0f172a; font-size: 0.85rem;">
+              <strong style="color: #16a34a;">🟢 Punto de Inicio (A)</strong><br>
+              <span>Hora: ${timeStr}</span><br>
+              <span style="font-size:0.75rem; color:#64748b;">${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)}</span>
+            </div>
+          `)
+          .addTo(tripPointsLayerGroup);
+      } else if (isLast) {
+        const endIcon = L.divIcon({
+          className: 'point-end-marker',
+          html: '<div style="background:#ef4444; color:white; font-size:12px; font-weight:bold; border-radius:50%; width:26px; height:26px; display:flex; align-items:center; justify-content:center; border:2px solid white; box-shadow:0 0 8px rgba(239,68,68,0.7);">B</div>',
+          iconSize: [26, 26],
+          iconAnchor: [13, 13]
+        });
+        L.marker([p.latitude, p.longitude], { icon: endIcon })
+          .bindPopup(`
+            <div style="font-family: sans-serif; color: #0f172a; font-size: 0.85rem;">
+              <strong style="color: #dc2626;">🏁 Punto Final (B)</strong><br>
+              <span>Hora: ${timeStr}</span><br>
+              <span style="font-size:0.75rem; color:#64748b;">${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)}</span>
+            </div>
+          `)
+          .addTo(tripPointsLayerGroup);
+      } else {
+        // Círculo interactivo para cada punto de 20s
+        const pointMarker = L.circleMarker([p.latitude, p.longitude], {
+          radius: 5,
+          color: '#3b82f6',
+          fillColor: '#c084fc',
+          fillOpacity: 0.9,
+          weight: 2
+        });
+
+        const bgStatus = p.isBackground ? '📱 Pantalla Bloqueada' : '👁️ Pantalla Encendida';
+        pointMarker.bindPopup(`
+          <div style="font-family: sans-serif; color: #0f172a; font-size: 0.85rem;">
+            <strong>Punto #${idx + 1}</strong> (${bgStatus})<br>
+            <span>Hora: ${timeStr}</span><br>
+            <span>Velocidad: ${p.speed || 0} km/h</span><br>
+            <span>Precisión: ±${p.accuracy || 0} m</span><br>
+            <span style="font-size:0.75rem; color:#64748b;">${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)}</span>
+          </div>
+        `);
+        pointMarker.addTo(tripPointsLayerGroup);
+      }
+    });
   }
 
   // Pintar paradas del viaje histórico
@@ -1183,7 +1250,7 @@ async function viewTripOnMap(tripId) {
     stopsList.innerHTML = '<p class="empty-text">No se registraron paradas en este viaje.</p>';
   }
 
-  log(`👀 Mostrando en mapa el viaje guardado: "${trip.name}"`, 'log-system');
+  log(`👀 Mostrando en mapa el viaje guardado con sus puntos: "${trip.name}"`, 'log-system');
 }
 
 btnExitTripView.addEventListener('click', exitHistoricalTripView);
@@ -1195,6 +1262,10 @@ function exitHistoricalTripView() {
 
   if (routePolyline) {
     routePolyline.setStyle({ color: '#38bdf8', weight: 5 });
+  }
+
+  if (tripPointsLayerGroup) {
+    tripPointsLayerGroup.clearLayers();
   }
 
   // Restaurar datos del viaje activo o en progreso
