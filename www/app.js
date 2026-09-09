@@ -111,7 +111,6 @@ const liveTag = document.getElementById('liveTag');
 const serverStatus = document.getElementById('serverStatus');
 const serverUrlInput = document.getElementById('serverUrl');
 const intervalSelect = document.getElementById('intervalSelect');
-const minAccuracySelect = document.getElementById('minAccuracySelect');
 const syncWithServerCheckbox = document.getElementById('syncWithServer');
 const useAudioHackCheckbox = document.getElementById('useAudioHack');
 const useWakeLockCheckbox = document.getElementById('useWakeLock');
@@ -709,12 +708,7 @@ function handleIncomingPosition(pos) {
     updateMapWithPosition(lat, lng, accuracy);
   }
 
-  const maxAllowedAccuracy = parseInt(minAccuracySelect.value, 10) || 30;
-  if (accuracy && accuracy > maxAllowedAccuracy) {
-    log(`⚠️ Descartado: Precisión (±${accuracy}m) supera el límite (<${maxAllowedAccuracy}m)`, 'log-err');
-    return;
-  }
-
+  // No se descarta ningún punto: se registra el 100% de ubicaciones recibidas
   const now = Date.now();
   const targetIntervalMs = (parseInt(intervalSelect.value, 10) || 20) * 1000;
 
@@ -898,7 +892,6 @@ function startTracking() {
   btnOpenStopModal.disabled = false;
   btnEnterPocket.disabled = false;
   intervalSelect.disabled = true;
-  minAccuracySelect.disabled = true;
   pulseIndicator.classList.add('active');
 
   lastCommittedTime = 0;
@@ -932,8 +925,7 @@ function startTracking() {
   );
 
   const sec = intervalSelect.value;
-  const acc = minAccuracySelect.value;
-  log(`🚀 Viaje iniciado: "${currentTripName}". Intervalo: ${sec}s | Precisión: <${acc}m`, 'log-system');
+  log(`🚀 Viaje iniciado: "${currentTripName}". Intervalo: ${sec}s | 100% de puntos registrados (sin descartes)`, 'log-system');
   log(`📱 Pantalla bloqueable: el viaje continuará grabándose con Audio Loop.`, 'log-bg');
 }
 
@@ -1071,7 +1063,6 @@ function resetActiveTripState() {
   btnOpenStopModal.disabled = true;
   btnEnterPocket.disabled = true;
   intervalSelect.disabled = false;
-  minAccuracySelect.disabled = false;
 
   if (routePolyline) routePolyline.setLatLngs([]);
   if (stopsLayerGroup) stopsLayerGroup.clearLayers();
