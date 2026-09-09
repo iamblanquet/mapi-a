@@ -490,7 +490,7 @@ async function testServerConnection() {
   } catch (err) {
     serverStatus.textContent = 'Sin conexión';
     serverStatus.className = 'status-indicator';
-    liveTag.textContent = 'Local Offline';
+    liveTag.textContent = navigator.onLine ? 'Local Offline' : 'Sin Internet';
     liveTag.className = 'badge';
     log(`Aviso conexión Render (${url}): ${err.message}`, 'log-err');
     return false;
@@ -498,6 +498,61 @@ async function testServerConnection() {
 }
 btnTestServer.addEventListener('click', testServerConnection);
 testServerConnection();
+
+// ----------------------------------------------------------------------------
+// Detección de Estado de Red (Online / Offline)
+// ----------------------------------------------------------------------------
+window.addEventListener('online', () => {
+  log('🌐 Conexión a internet restablecida.', 'log-sync');
+  testServerConnection().then(online => {
+    if (online) {
+      syncPendingOfflineData();
+    }
+  });
+});
+
+window.addEventListener('offline', () => {
+  liveTag.textContent = '100% Offline (GPS Activo)';
+  liveTag.className = 'badge';
+  serverStatus.textContent = 'Sin Internet';
+  serverStatus.className = 'status-indicator';
+  log('📡 Modo Sin Internet: El GPS satelital continuará registrando y guardando todo en el teléfono.', 'log-bg');
+});
+
+// Sincronizar viajes guardados mientras no había internet
+async function syncPendingOfflineData() {
+  const pendingTripsKey = 'gps_pwa_pending_trips';
+  let pending = [];
+  try {
+    const raw = localStorage.getItem(pendingTripsKey);
+    if (raw) pending = JSON.parse(raw);
+  } catch (e) {}
+
+  if (pending.length === 0) return;
+
+  log(`☁️ Sincronizando ${pending.length} viajes pendientes con Render...`, 'log-sync');
+  const url = serverUrlInput.value.trim();
+  if (!url) return;
+
+  const remaining = [];
+  for (const trip of pending) {
+    try {
+      const res = await fetch(`${url}/api/trips`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(trip)
+      });
+      if (!res.ok) remaining.push(trip);
+    } catch (e) {
+      remaining.push(trip);
+    }
+  }
+
+  localStorage.setItem(pendingTripsKey, JSON.stringify(remaining));
+  if (remaining.length === 0) {
+    log('✅ Todos los viajes pendientes se sincronizaron con éxito en Render.', 'log-sync');
+  }
+}
 
 // ----------------------------------------------------------------------------
 // Ciclo de Vida: Detección de Suspensión
@@ -939,20 +994,39 @@ btnConfirmFinish.addEventListener('click', async () => {
 
 async function saveTripToServer(trip) {
   const url = serverUrlInput.value.trim();
-  if (!url) return;
+  if (!url || !navigator.onLine) {
+    queuePendingTrip(trip);
+    return;
+  }
 
   try {
     const res = await fetch(`${url}/api/trips`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(trip)
+      body: JSON.stringify(trip),
+      signal: AbortSignal.timeout(6000)
     });
     if (res.ok) {
       log(`☁️ Viaje respaldado con éxito en Render`, 'log-sync');
+    } else {
+      queuePendingTrip(trip);
     }
   } catch (err) {
-    console.warn('Error guardando viaje en Render:', err);
+    queuePendingTrip(trip);
   }
+}
+
+function queuePendingTrip(trip) {
+  try {
+    const pendingTripsKey = 'gps_pwa_pending_trips';
+    const raw = localStorage.getItem(pendingTripsKey);
+    const pending = raw ? JSON.parse(raw) : [];
+    if (!pending.some(t => t.id === trip.id)) {
+      pending.push(trip);
+      localStorage.setItem(pendingTripsKey, JSON.stringify(pending));
+      log(`💾 Viaje guardado localmente (se subirá a Render al recuperar internet)`, 'log-system');
+    }
+  } catch (e) {}
 }
 
 function resetActiveTripState() {
