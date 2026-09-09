@@ -177,8 +177,27 @@ body {
   opacity: 0.85;
 }
 
-.banner-info strong {
-  font-size: 0.95rem;
+.banner-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.btn-snap-road {
+  background: #10b981 !important;
+  color: white !important;
+  font-weight: 700 !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.4);
+}
+
+.btn-snap-road:hover {
+  background: #059669 !important;
+}
+
+.btn-snap-road.active {
+  background: #f59e0b !important;
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.4);
 }
 
 .btn-sm {
@@ -433,6 +452,17 @@ body {
   background-color: #ec4899;
   border: 1px solid #a855f7;
   box-shadow: 0 0 4px rgba(236, 72, 153, 0.6);
+}
+
+.dot-road {
+  background-color: #10b981;
+  border: 1px solid #059669;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.8);
+}
+
+.road-badge {
+  color: #34d399;
+  font-weight: 600;
 }
 
 .map-viewport {

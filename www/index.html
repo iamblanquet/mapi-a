@@ -88,7 +88,12 @@
         <span>Mostrando viaje guardado:</span>
         <strong id="viewingTripTitle">Nombre del Viaje</strong>
       </div>
-      <button id="btnExitTripView" class="btn btn-secondary btn-sm">Volver a En Vivo</button>
+      <div class="banner-actions">
+        <button id="btnSnapToRoads" class="btn btn-snap-road btn-sm" title="Ajustar la trayectoria siguiendo exactamente las calles">
+          🛣️ Ajustar a Calles
+        </button>
+        <button id="btnExitTripView" class="btn btn-secondary btn-sm">Volver a En Vivo</button>
+      </div>
     </div>
 
     <!-- SECCIÓN 1: VISTA EN VIVO Y MAPA -->
@@ -150,6 +155,7 @@
         <div class="map-legend-bar">
           <span class="legend-item"><span class="legend-dot dot-screen-on"></span> Pantalla encendida</span>
           <span class="legend-item"><span class="legend-dot dot-screen-off"></span> Pantalla bloqueada / Segundo plano</span>
+          <span id="roadSnapBadge" class="legend-item road-badge hidden"><span class="legend-dot dot-road"></span> Ajustado a Calles</span>
         </div>
         <div id="tripMap" class="map-viewport"></div>
       </section>

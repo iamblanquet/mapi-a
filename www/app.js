@@ -43,10 +43,13 @@ let tripsHistory = [];
 // Variables de Mapa Leaflet
 let map = null;
 let routePolyline = null;
+let roadSnapPolyline = null;
 let currentPositionMarker = null;
 let accuracyCircle = null;
 let stopsLayerGroup = null;
 let tripPointsLayerGroup = null;
+let isSnappedToRoads = false;
+let currentlyViewedTrip = null;
 
 let deviceId = localStorage.getItem('gps_device_id');
 if (!deviceId) {
@@ -67,7 +70,9 @@ const btnRefreshTrips = document.getElementById('btnRefreshTrips');
 
 const viewingTripBanner = document.getElementById('viewingTripBanner');
 const viewingTripTitle = document.getElementById('viewingTripTitle');
+const btnSnapToRoads = document.getElementById('btnSnapToRoads');
 const btnExitTripView = document.getElementById('btnExitTripView');
+const roadSnapBadge = document.getElementById('roadSnapBadge');
 const mapHeading = document.getElementById('mapHeading');
 
 const btnStart = document.getElementById('btnStart');
@@ -216,6 +221,14 @@ function initMap() {
     weight: 5,
     opacity: 0.9,
     lineJoin: 'round'
+  }).addTo(map);
+
+  roadSnapPolyline = L.polyline([], {
+    color: '#10b981', // Verde esmeralda para el trazo por calles
+    weight: 6,
+    opacity: 0.95,
+    lineJoin: 'round',
+    dashArray: null
   }).addTo(map);
 
   stopsLayerGroup = L.layerGroup().addTo(map);
@@ -1150,6 +1163,8 @@ function resetActiveTripState() {
   intervalSelect.disabled = false;
 
   if (routePolyline) routePolyline.setLatLngs([]);
+  if (roadSnapPolyline) roadSnapPolyline.setLatLngs([]);
+  if (roadSnapBadge) roadSnapBadge.classList.add('hidden');
   if (stopsLayerGroup) stopsLayerGroup.clearLayers();
   if (currentPositionMarker && map) {
     map.removeLayer(currentPositionMarker);
@@ -1293,7 +1308,13 @@ async function viewTripOnMap(tripId) {
     return;
   }
 
-  isViewingHistoricalTrip = true;
+  currentlyViewedTrip = trip;
+  isSnappedToRoads = false;
+  btnSnapToRoads.textContent = '🛣️ Ajustar a Calles';
+  btnSnapToRoads.classList.remove('active');
+  btnSnapToRoads.disabled = false;
+  roadSnapBadge.classList.add('hidden');
+  if (roadSnapPolyline) roadSnapPolyline.setLatLngs([]);
 
   // Cambiar a la pestaña del mapa
   switchTab('live');
@@ -1309,11 +1330,11 @@ async function viewTripOnMap(tripId) {
   pointsCount.textContent = trip.points.length;
   valSpeed.textContent = '-- km/h';
 
-  // Pintar recorrido en mapa
+  // Pintar recorrido original en mapa
   if (routePolyline) {
     const latLngs = trip.points.map(p => [p.latitude, p.longitude]);
     routePolyline.setLatLngs(latLngs);
-    routePolyline.setStyle({ color: '#a855f7', weight: 5 }); // Color morado para viajes históricos
+    routePolyline.setStyle({ color: '#a855f7', weight: 5, opacity: 0.9 }); // Color morado para viajes históricos
     map.fitBounds(routePolyline.getBounds(), { padding: [35, 35] });
   }
 
@@ -1422,15 +1443,171 @@ async function viewTripOnMap(tripId) {
   log(`👀 Mostrando en mapa el viaje guardado con sus puntos: "${trip.name}"`, 'log-system');
 }
 
+// ----------------------------------------------------------------------------
+// SNAP-TO-ROADS CON OSRM (Ajuste de Trayectoria a Calles Reales)
+// ----------------------------------------------------------------------------
+btnSnapToRoads.addEventListener('click', async () => {
+  if (!currentlyViewedTrip || !currentlyViewedTrip.points || currentlyViewedTrip.points.length < 2) {
+    alert('Se necesitan al menos 2 puntos registrados para ajustar a las calles.');
+    return;
+  }
+
+  // Si ya está activo el trazo por calles, permitir volver a la vista original recta
+  if (isSnappedToRoads) {
+    isSnappedToRoads = false;
+    if (roadSnapPolyline) roadSnapPolyline.setLatLngs([]);
+    if (routePolyline) {
+      const latLngs = currentlyViewedTrip.points.map(p => [p.latitude, p.longitude]);
+      routePolyline.setLatLngs(latLngs);
+      routePolyline.setStyle({ color: '#a855f7', weight: 5, opacity: 0.9 });
+    }
+    btnSnapToRoads.textContent = '🛣️ Ajustar a Calles';
+    btnSnapToRoads.classList.remove('active');
+    roadSnapBadge.classList.add('hidden');
+    log('Trazo restaurado a puntos GPS directos.', 'log-system');
+    return;
+  }
+
+  // Iniciar cálculo con OSRM
+  btnSnapToRoads.disabled = true;
+  btnSnapToRoads.textContent = '⏳ Trazando calles...';
+  log('🛣️ Consultando servicio de cartografía vial (OSRM / OpenStreetMap)...', 'log-system');
+
+  try {
+    const roadCoordinates = await fetchSnappedRoadGeometry(currentlyViewedTrip.points);
+    if (roadCoordinates && roadCoordinates.length > 0) {
+      isSnappedToRoads = true;
+      if (roadSnapPolyline) {
+        roadSnapPolyline.setLatLngs(roadCoordinates);
+      }
+      // Atenuar línea recta de fondo para destacar la ruta por las calles
+      if (routePolyline) {
+        routePolyline.setStyle({ color: '#c084fc', weight: 2, opacity: 0.4 });
+      }
+
+      btnSnapToRoads.textContent = '📍 Ver Líneas Directas';
+      btnSnapToRoads.classList.add('active');
+      roadSnapBadge.classList.remove('hidden');
+      map.fitBounds(roadSnapPolyline.getBounds(), { padding: [35, 35] });
+      log(`✅ Trazo adherido a calles con éxito: ${roadCoordinates.length} segmentos viales calculados.`, 'log-sync');
+    } else {
+      throw new Error('No se pudo encontrar una vía vehicular cercana para este trayecto.');
+    }
+  } catch (err) {
+    log(`⚠️ No se pudo ajustar a calles: ${err.message}`, 'log-err');
+    alert(`No fue posible ajustar el trazo a las calles:\n${err.message}\n(Se mantiene el trazo GPS directo).`);
+  } finally {
+    btnSnapToRoads.disabled = false;
+  }
+});
+
+// Algoritmo de consulta a OSRM (Map Matching / Routing) por lotes de waypoints
+async function fetchSnappedRoadGeometry(gpsPoints) {
+  if (!navigator.onLine) {
+    throw new Error('Se requiere conexión a internet para consultar la cartografía de calles.');
+  }
+
+  // Filtrar puntos redundantes muy cercanos (< 5 metros) para optimizar la petición OSRM
+  const sampledPoints = [];
+  gpsPoints.forEach(pt => {
+    if (sampledPoints.length === 0) {
+      sampledPoints.push(pt);
+    } else {
+      const last = sampledPoints[sampledPoints.length - 1];
+      const dist = calculateDistanceBetweenKm(last.latitude, last.longitude, pt.latitude, pt.longitude);
+      if (dist >= 0.005) { // al menos 5 metros
+        sampledPoints.push(pt);
+      }
+    }
+  });
+
+  // Si son muy pocos, usar los puntos originales
+  const targetPoints = sampledPoints.length >= 2 ? sampledPoints : gpsPoints;
+
+  // OSRM acepta hasta 90-100 coordenadas por petición en su API pública
+  // Si el viaje es largo, dividimos en trozos (chunks) de 60 coordenadas con solapamiento
+  const CHUNK_SIZE = 60;
+  const fullGeometry = [];
+
+  for (let i = 0; i < targetPoints.length - 1; i += (CHUNK_SIZE - 1)) {
+    const chunk = targetPoints.slice(i, i + CHUNK_SIZE);
+    if (chunk.length < 2) break;
+
+    const coordsStr = chunk.map(p => `${p.longitude.toFixed(6)},${p.latitude.toFixed(6)}`).join(';');
+    
+    // 1. Intentar primero con el servicio Match (Map Matching con timestamps y radios)
+    let chunkCoords = await requestOsrmMatch(coordsStr);
+
+    // 2. Si Match falla o no encuentra coincidencia exacta, usar servicio Route
+    if (!chunkCoords || chunkCoords.length === 0) {
+      chunkCoords = await requestOsrmRoute(coordsStr);
+    }
+
+    if (chunkCoords && chunkCoords.length > 0) {
+      // Evitar duplicar el punto de unión entre chunks
+      if (fullGeometry.length > 0 && chunkCoords.length > 0) {
+        chunkCoords.shift();
+      }
+      fullGeometry.push(...chunkCoords);
+    }
+  }
+
+  return fullGeometry;
+}
+
+async function requestOsrmMatch(coordsStr) {
+  try {
+    const url = `https://router.project-osrm.org/match/v1/driving/${coordsStr}?overview=full&geometries=geojson&gaps=ignore&tidy=true`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(9000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.code === 'Ok' && data.matchings && data.matchings.length > 0) {
+      const coords = [];
+      data.matchings.forEach(m => {
+        if (m.geometry && m.geometry.coordinates) {
+          m.geometry.coordinates.forEach(c => coords.push([c[1], c[0]])); // GeoJSON es [lng, lat] -> Leaflet es [lat, lng]
+        }
+      });
+      return coords;
+    }
+  } catch (e) {}
+  return null;
+}
+
+async function requestOsrmRoute(coordsStr) {
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${coordsStr}?overview=full&geometries=geojson&continue_straight=default`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(9000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
+      const routeGeom = data.routes[0].geometry;
+      if (routeGeom && routeGeom.coordinates) {
+        return routeGeom.coordinates.map(c => [c[1], c[0]]);
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
 btnExitTripView.addEventListener('click', exitHistoricalTripView);
 
 function exitHistoricalTripView() {
   isViewingHistoricalTrip = false;
+  currentlyViewedTrip = null;
+  isSnappedToRoads = false;
   viewingTripBanner.classList.add('hidden');
+  roadSnapBadge.classList.add('hidden');
+  btnSnapToRoads.textContent = '🛣️ Ajustar a Calles';
+  btnSnapToRoads.classList.remove('active');
   mapHeading.textContent = 'Recorrido del Viaje';
 
   if (routePolyline) {
-    routePolyline.setStyle({ color: '#38bdf8', weight: 5 });
+    routePolyline.setStyle({ color: '#38bdf8', weight: 5, opacity: 0.9 });
+  }
+
+  if (roadSnapPolyline) {
+    roadSnapPolyline.setLatLngs([]);
   }
 
   if (tripPointsLayerGroup) {
