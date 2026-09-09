@@ -50,6 +50,22 @@ let stopsLayerGroup = null;
 let tripPointsLayerGroup = null;
 let isSnappedToRoads = false;
 let currentlyViewedTrip = null;
+let currentlyViewedRoadCoordinates = null;
+
+// Variables para animación del cochecito
+let isAnimating = false;
+let isAnimPaused = false;
+let animSpeedMultiplier = 1;
+let animRafId = null;
+let animLastFrameTime = 0;
+let animCurrentProgress = 0;
+let animRoadCoords = [];
+let animMilestones = [];
+let animTotalDistanceMeters = 0;
+let animCumulativeDistances = [];
+let animTotalDurationSec = 0;
+let animVehicleMarker = null;
+let animProgressPolyline = null;
 
 let deviceId = localStorage.getItem('gps_device_id');
 if (!deviceId) {
@@ -71,9 +87,27 @@ const btnRefreshTrips = document.getElementById('btnRefreshTrips');
 const viewingTripBanner = document.getElementById('viewingTripBanner');
 const viewingTripTitle = document.getElementById('viewingTripTitle');
 const btnSnapToRoads = document.getElementById('btnSnapToRoads');
+const btnPlayTrip = document.getElementById('btnPlayTrip');
 const btnExitTripView = document.getElementById('btnExitTripView');
 const roadSnapBadge = document.getElementById('roadSnapBadge');
 const mapHeading = document.getElementById('mapHeading');
+
+// Controles de la barra flotante de animación
+const playbackControls = document.getElementById('playbackControls');
+const btnPlayPause = document.getElementById('btnPlayPause');
+const playPauseIcon = document.getElementById('playPauseIcon');
+const btnRestartAnim = document.getElementById('btnRestartAnim');
+const playbackProgress = document.getElementById('playbackProgress');
+const playbackCurrentTime = document.getElementById('playbackCurrentTime');
+const playbackTotalTime = document.getElementById('playbackTotalTime');
+const hudSegmentTimeBadge = document.getElementById('hudSegmentTimeBadge');
+const hudSegmentTimeText = document.getElementById('hudSegmentTimeText');
+const hudSpeedBadge = document.getElementById('hudSpeedBadge');
+const hudSpeedText = document.getElementById('hudSpeedText');
+const hudDistanceBadge = document.getElementById('hudDistanceBadge');
+const hudDistanceText = document.getElementById('hudDistanceText');
+const chkFollowVehicle = document.getElementById('chkFollowVehicle');
+const btnClosePlayback = document.getElementById('btnClosePlayback');
 
 const btnStart = document.getElementById('btnStart');
 const btnStop = document.getElementById('btnStop');
@@ -299,7 +333,7 @@ function addStopMarkerToMap(stopRecord) {
 
   const stopIcon = L.divIcon({
     className: 'stop-pin-marker',
-    html: `<div class="stop-pin">📍</div>`,
+    html: `<div class="stop-pin" style="background:#f59e0b; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; border:2px solid #ffffff; box-shadow:0 0 10px rgba(245,158,11,0.8);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg></div>`,
     iconSize: [30, 30],
     iconAnchor: [15, 28],
     popupAnchor: [0, -25]
@@ -309,7 +343,7 @@ function addStopMarkerToMap(stopRecord) {
   const marker = L.marker([stopRecord.latitude, stopRecord.longitude], { icon: stopIcon })
     .bindPopup(`
       <div style="font-family: sans-serif; color: #0f172a;">
-        <strong style="font-size: 0.95rem;">📍 ${escapeHtml(stopRecord.note)}</strong>
+        <strong style="font-size: 0.95rem;"> ${escapeHtml(stopRecord.note)}</strong>
         <p style="margin: 4px 0 0; font-size: 0.8rem; color: #64748b;">Hora: ${timeStr}</p>
         <p style="margin: 2px 0 0; font-size: 0.75rem; color: #94a3b8;">${stopRecord.latitude.toFixed(5)}, ${stopRecord.longitude.toFixed(5)}</p>
       </div>
@@ -407,7 +441,7 @@ function saveStop(note) {
   valStopsCount.textContent = stops.length;
   stopsTotalBadge.textContent = stops.length;
 
-  log(`🛑 Parada guardada: "${note}" (${currentLat.toFixed(5)}, ${currentLng.toFixed(5)})`, 'log-bg');
+  log(` Parada guardada: "${note}" (${currentLat.toFixed(5)}, ${currentLng.toFixed(5)})`, 'log-bg');
 
   if (syncWithServerCheckbox.checked) {
     sendStopToServer(stopRecord);
@@ -430,7 +464,7 @@ function renderStopsList() {
     const time = new Date(s.timestamp).toLocaleTimeString();
     item.innerHTML = `
       <div class="stop-item-info">
-        <span class="stop-item-title">📍 ${escapeHtml(s.note)}</span>
+        <span class="stop-item-title"> ${escapeHtml(s.note)}</span>
         <span class="stop-item-meta">${time} • ${s.latitude.toFixed(4)}, ${s.longitude.toFixed(4)}</span>
       </div>
       <span class="stop-item-badge">#${idx + 1}</span>
@@ -465,7 +499,7 @@ async function sendStopToServer(stopRecord) {
       body: JSON.stringify(stopRecord)
     });
     if (res.ok) {
-      log(`☁️ Parada guardada en Render: ${stopRecord.note}`, 'log-sync');
+      log(`️ Parada guardada en Render: ${stopRecord.note}`, 'log-sync');
     }
   } catch (err) {
     console.warn('Error enviando parada a Render:', err);
@@ -529,7 +563,7 @@ testServerConnection();
 // Detección de Estado de Red (Online / Offline)
 // ----------------------------------------------------------------------------
 window.addEventListener('online', () => {
-  log('🌐 Conexión a internet restablecida.', 'log-sync');
+  log(' Conexión a internet restablecida.', 'log-sync');
   testServerConnection().then(online => {
     if (online) {
       syncPendingOfflineData();
@@ -542,7 +576,7 @@ window.addEventListener('offline', () => {
   liveTag.className = 'badge';
   serverStatus.textContent = 'Sin Internet';
   serverStatus.className = 'status-indicator';
-  log('📡 Modo Sin Internet: El GPS satelital continuará registrando y guardando todo en el teléfono.', 'log-bg');
+  log(' Modo Sin Internet: El GPS satelital continuará registrando y guardando todo en el teléfono.', 'log-bg');
 });
 
 // Sincronizar viajes guardados mientras no había internet
@@ -556,7 +590,7 @@ async function syncPendingOfflineData() {
 
   if (pending.length === 0) return;
 
-  log(`☁️ Sincronizando ${pending.length} viajes pendientes con Render...`, 'log-sync');
+  log(`️ Sincronizando ${pending.length} viajes pendientes con Render...`, 'log-sync');
   const url = serverUrlInput.value.trim();
   if (!url) return;
 
@@ -576,7 +610,7 @@ async function syncPendingOfflineData() {
 
   localStorage.setItem(pendingTripsKey, JSON.stringify(remaining));
   if (remaining.length === 0) {
-    log('✅ Todos los viajes pendientes se sincronizaron con éxito en Render.', 'log-sync');
+    log(' Todos los viajes pendientes se sincronizaron con éxito en Render.', 'log-sync');
   }
 }
 
@@ -587,9 +621,9 @@ document.addEventListener('visibilitychange', () => {
   const isHidden = document.hidden;
   if (isHidden) {
     wasScreenHiddenInWindow = true;
-    log('📱 Pantalla bloqueada / Segundo plano. Audio Loop y Web Audio mantienen el proceso vivo.', 'log-bg');
+    log(' Pantalla bloqueada / Segundo plano. Audio Loop y Web Audio mantienen el proceso vivo.', 'log-bg');
   } else {
-    log('👁️ PWA restaurada a primer plano.', 'log-system');
+    log('️ PWA restaurada a primer plano.', 'log-system');
     if (isTracking && useWakeLockCheckbox.checked) {
       requestScreenWakeLock();
     }
@@ -604,9 +638,9 @@ async function requestScreenWakeLock() {
   if ('wakeLock' in navigator) {
     try {
       wakeLockSentinel = await navigator.wakeLock.request('screen');
-      log('💡 Screen Wake Lock ACTIVO.', 'log-system');
+      log(' Screen Wake Lock ACTIVO.', 'log-system');
       wakeLockSentinel.addEventListener('release', () => {
-        log('💡 Screen Wake Lock liberado.', 'log-system');
+        log(' Screen Wake Lock liberado.', 'log-system');
       });
     } catch (err) {
       console.warn('Wake Lock no disponible:', err);
@@ -630,7 +664,7 @@ function startAudioLoopHack() {
   if (bgAudio) {
     bgAudio.volume = 0.05;
     bgAudio.play().then(() => {
-      log('🔊 Audio Loop HTML5 iniciado.', 'log-bg');
+      log(' Audio Loop HTML5 iniciado.', 'log-bg');
     }).catch((err) => {
       console.warn('Aviso Audio HTML5:', err.message);
     });
@@ -659,7 +693,7 @@ function startAudioLoopHack() {
         audioOscillator.connect(audioGain);
         audioGain.connect(audioCtx.destination);
         audioOscillator.start();
-        log('⚡ Motor Web Audio API activo: el hilo de ejecución no se suspenderá.', 'log-bg');
+        log(' Motor Web Audio API activo: el hilo de ejecución no se suspenderá.', 'log-bg');
       }
     }
   } catch (err) {
@@ -881,7 +915,7 @@ function commitPosition(record) {
   }
 
   const bgTag = record.isBackground ? ' [EN SEGUNDO PLANO / BLOQUEADO]' : '';
-  log(`🎯 Punto guardado (20s): ${record.latitude.toFixed(5)}, ${record.longitude.toFixed(5)} (±${record.accuracy}m)${bgTag}`, 
+  log(` Punto guardado (20s): ${record.latitude.toFixed(5)}, ${record.longitude.toFixed(5)} (±${record.accuracy}m)${bgTag}`, 
       record.isBackground ? 'log-bg' : 'log-gps');
 
   if (syncWithServerCheckbox.checked) {
@@ -904,7 +938,7 @@ async function sendLocationToServer(record) {
       })
     });
     if (res.ok) {
-      log(`☁️ Punto enviado a Render`, 'log-sync');
+      log(`️ Punto enviado a Render`, 'log-sync');
     }
   } catch (err) {
     console.warn('Error enviando a Render:', err);
@@ -1027,8 +1061,8 @@ function startTracking() {
   );
 
   const sec = intervalSelect.value;
-  log(`🚀 Viaje iniciado: "${currentTripName}". Intervalo: ${sec}s | 100% de puntos registrados (sin descartes)`, 'log-system');
-  log(`📱 Pantalla bloqueable: el viaje continuará grabándose con Audio Loop.`, 'log-bg');
+  log(` Viaje iniciado: "${currentTripName}". Intervalo: ${sec}s | 100% de puntos registrados (sin descartes)`, 'log-system');
+  log(` Pantalla bloqueable: el viaje continuará grabándose con Audio Loop.`, 'log-bg');
 }
 
 function pauseTracking() {
@@ -1089,7 +1123,7 @@ btnConfirmFinish.addEventListener('click', async () => {
     await saveTripToServer(finishedTrip);
   }
 
-  log(`🏁 Viaje finalizado y guardado: "${finalName}" (${finishedTrip.distanceKm} km, ${finishedTrip.stopsCount} paradas)`, 'log-sync');
+  log(` Viaje finalizado y guardado: "${finalName}" (${finishedTrip.distanceKm} km, ${finishedTrip.stopsCount} paradas)`, 'log-sync');
 
   // Limpiar viaje activo para poder iniciar uno nuevo
   resetActiveTripState();
@@ -1115,7 +1149,7 @@ async function saveTripToServer(trip) {
       signal: AbortSignal.timeout(6000)
     });
     if (res.ok) {
-      log(`☁️ Viaje respaldado con éxito en Render`, 'log-sync');
+      log(`️ Viaje respaldado con éxito en Render`, 'log-sync');
     } else {
       queuePendingTrip(trip);
     }
@@ -1132,7 +1166,7 @@ function queuePendingTrip(trip) {
     if (!pending.some(t => t.id === trip.id)) {
       pending.push(trip);
       localStorage.setItem(pendingTripsKey, JSON.stringify(pending));
-      log(`💾 Viaje guardado localmente (se subirá a Render al recuperar internet)`, 'log-system');
+      log(` Viaje guardado localmente (se subirá a Render al recuperar internet)`, 'log-system');
     }
   } catch (e) {}
 }
@@ -1279,18 +1313,38 @@ function renderTripsList() {
       <div class="trip-card-header">
         <div>
           <h3 class="trip-card-title">${escapeHtml(trip.name || 'Viaje Sin Título')}</h3>
-          <span class="trip-card-date">📅 ${dateFormatted}</span>
+          <span class="trip-card-date">
+            <svg class="ui-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            ${dateFormatted}
+          </span>
         </div>
       </div>
       <div class="trip-card-badges">
-        <span class="trip-stat-badge">🛣️ <strong>${dist} km</strong></span>
-        <span class="trip-stat-badge">📍 <strong>${stps} paradas</strong></span>
-        <span class="trip-stat-badge">📡 <strong>${pts} puntos</strong></span>
+        <span class="trip-stat-badge">
+          <svg class="ui-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="19" r="3"></circle><path d="M9 19h8.5a4.5 4.5 0 0 0 4.5-4.5v0a4.5 4.5 0 0 0-4.5-4.5H11"></path><polyline points="14 7 11 10 14 13"></polyline></svg>
+          <strong>${dist} km</strong>
+        </span>
+        <span class="trip-stat-badge">
+          <svg class="ui-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+          <strong>${stps} paradas</strong>
+        </span>
+        <span class="trip-stat-badge">
+          <svg class="ui-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"><circle cx="12" cy="12" r="2"></circle><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49"></path></svg>
+          <strong>${pts} puntos</strong>
+        </span>
       </div>
       <div class="trip-card-actions">
-        <button class="btn btn-primary btn-sm btn-view-trip" data-id="${trip.id}">🗺️ Ver en Mapa</button>
-        <button class="btn btn-outline btn-sm btn-export-trip" data-id="${trip.id}">📥 Descargar</button>
-        <button class="btn btn-outline-danger btn-sm btn-delete-trip" data-id="${trip.id}">🗑️</button>
+        <button class="btn btn-primary btn-sm btn-view-trip" data-id="${trip.id}">
+          <svg class="ui-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>
+          Ver en Mapa
+        </button>
+        <button class="btn btn-outline btn-sm btn-export-trip" data-id="${trip.id}" title="Descargar viaje">
+          <svg class="ui-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          Descargar
+        </button>
+        <button class="btn btn-outline-danger btn-sm btn-delete-trip" data-id="${trip.id}" title="Eliminar viaje">
+          <svg class="ui-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+        </button>
       </div>
     `;
 
@@ -1349,7 +1403,7 @@ async function viewTripOnMap(tripId) {
 
   currentlyViewedTrip = trip;
   isSnappedToRoads = false;
-  btnSnapToRoads.textContent = '🛣️ Ajustar a Calles';
+  btnSnapToRoads.textContent = '️ Ajustar a Calles';
   btnSnapToRoads.classList.remove('active');
   btnSnapToRoads.disabled = false;
   roadSnapBadge.classList.add('hidden');
@@ -1395,7 +1449,7 @@ async function viewTripOnMap(tripId) {
         L.marker([p.latitude, p.longitude], { icon: startIcon })
           .bindPopup(`
             <div style="font-family: sans-serif; color: #0f172a; font-size: 0.85rem;">
-              <strong style="color: #16a34a;">🟢 Punto de Inicio (A)</strong><br>
+              <strong style="color: #16a34a;"> Punto de Inicio (A)</strong><br>
               <span>Hora: ${timeStr}</span><br>
               <span style="font-size:0.75rem; color:#64748b;">${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)}</span>
             </div>
@@ -1411,7 +1465,7 @@ async function viewTripOnMap(tripId) {
         L.marker([p.latitude, p.longitude], { icon: endIcon })
           .bindPopup(`
             <div style="font-family: sans-serif; color: #0f172a; font-size: 0.85rem;">
-              <strong style="color: #dc2626;">🏁 Punto Final (B)</strong><br>
+              <strong style="color: #dc2626;"> Punto Final (B)</strong><br>
               <span>Hora: ${timeStr}</span><br>
               <span style="font-size:0.75rem; color:#64748b;">${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)}</span>
             </div>
@@ -1431,8 +1485,8 @@ async function viewTripOnMap(tripId) {
         });
 
         const bgStatus = p.isBackground 
-          ? '<span style="color:#9333ea; font-weight:bold;">📱 Pantalla Bloqueada (Segundo Plano)</span>' 
-          : '<span style="color:#0284c7; font-weight:bold;">👁️ Pantalla Encendida</span>';
+          ? '<span style="color:#9333ea; font-weight:bold;"> Pantalla Bloqueada (Segundo Plano)</span>' 
+          : '<span style="color:#0284c7; font-weight:bold;">️ Pantalla Encendida</span>';
         pointMarker.bindPopup(`
           <div style="font-family: sans-serif; color: #0f172a; font-size: 0.85rem;">
             <strong>Punto #${idx + 1}</strong> — ${bgStatus}<br>
@@ -1465,7 +1519,7 @@ async function viewTripOnMap(tripId) {
       const time = new Date(s.timestamp).toLocaleTimeString();
       item.innerHTML = `
         <div class="stop-item-info">
-          <span class="stop-item-title">📍 ${escapeHtml(s.note)}</span>
+          <span class="stop-item-title"> ${escapeHtml(s.note)}</span>
           <span class="stop-item-meta">${time} • ${s.latitude.toFixed(4)}, ${s.longitude.toFixed(4)}</span>
         </div>
         <span class="stop-item-badge">#${idx + 1}</span>
@@ -1479,7 +1533,7 @@ async function viewTripOnMap(tripId) {
     stopsList.innerHTML = '<p class="empty-text">No se registraron paradas en este viaje.</p>';
   }
 
-  log(`👀 Mostrando en mapa el viaje guardado con sus puntos: "${trip.name}"`, 'log-system');
+  log(` Mostrando en mapa el viaje guardado con sus puntos: "${trip.name}"`, 'log-system');
 }
 
 // ----------------------------------------------------------------------------
@@ -1500,7 +1554,7 @@ btnSnapToRoads.addEventListener('click', async () => {
       routePolyline.setLatLngs(latLngs);
       routePolyline.setStyle({ color: '#a855f7', weight: 5, opacity: 0.9 });
     }
-    btnSnapToRoads.textContent = '🛣️ Ajustar a Calles';
+    btnSnapToRoads.textContent = '️ Ajustar a Calles';
     btnSnapToRoads.classList.remove('active');
     roadSnapBadge.classList.add('hidden');
     log('Trazo restaurado a puntos GPS directos.', 'log-system');
@@ -1510,7 +1564,7 @@ btnSnapToRoads.addEventListener('click', async () => {
   // Iniciar cálculo con OSRM
   btnSnapToRoads.disabled = true;
   btnSnapToRoads.textContent = '⏳ Trazando calles...';
-  log('🛣️ Consultando servicio de cartografía vial (OSRM / OpenStreetMap)...', 'log-system');
+  log('️ Consultando servicio de cartografía vial (OSRM / OpenStreetMap)...', 'log-system');
 
   try {
     const roadCoordinates = await fetchSnappedRoadGeometry(currentlyViewedTrip.points);
@@ -1524,16 +1578,16 @@ btnSnapToRoads.addEventListener('click', async () => {
         routePolyline.setStyle({ color: '#c084fc', weight: 2, opacity: 0.4 });
       }
 
-      btnSnapToRoads.textContent = '📍 Ver Líneas Directas';
+      btnSnapToRoads.textContent = ' Ver Líneas Directas';
       btnSnapToRoads.classList.add('active');
       roadSnapBadge.classList.remove('hidden');
       map.fitBounds(roadSnapPolyline.getBounds(), { padding: [35, 35] });
-      log(`✅ Trazo adherido a calles con éxito: ${roadCoordinates.length} segmentos viales calculados.`, 'log-sync');
+      log(` Trazo adherido a calles con éxito: ${roadCoordinates.length} segmentos viales calculados.`, 'log-sync');
     } else {
       throw new Error('No se pudo encontrar una vía vehicular cercana para este trayecto.');
     }
   } catch (err) {
-    log(`⚠️ No se pudo ajustar a calles: ${err.message}`, 'log-err');
+    log(`️ No se pudo ajustar a calles: ${err.message}`, 'log-err');
     alert(`No fue posible ajustar el trazo a las calles:\n${err.message}\n(Se mantiene el trazo GPS directo).`);
   } finally {
     btnSnapToRoads.disabled = false;
@@ -1652,13 +1706,400 @@ async function requestOsrmRoute(chunk) {
 
 btnExitTripView.addEventListener('click', exitHistoricalTripView);
 
+// ----------------------------------------------------------------------------
+// MOTOR DE ANIMACI�N DEL RECORRIDO Y COCHECITO (SIMULADOR DE VIAJE)
+// ----------------------------------------------------------------------------
+
+function initPlaybackControls() {
+  if (!btnPlayTrip) return;
+
+  btnPlayTrip.addEventListener('click', async () => {
+    if (!currentlyViewedTrip || !currentlyViewedTrip.points || currentlyViewedTrip.points.length < 2) {
+      alert('Se requieren al menos 2 puntos para simular el recorrido.');
+      return;
+    }
+
+    // Si a�n no se han calculado las calles con OSRM, calcularlas autom�ticamente
+    if (!currentlyViewedRoadCoordinates || currentlyViewedRoadCoordinates.length === 0) {
+      btnPlayTrip.disabled = true;
+      btnPlayTrip.innerHTML = `
+        <svg class="ui-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 4v6h6"></path><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+        Trazando calles...
+      `;
+      try {
+        const roadCoords = await fetchSnappedRoadGeometry(currentlyViewedTrip.points);
+        if (roadCoords && roadCoords.length > 0) {
+          currentlyViewedRoadCoordinates = roadCoords;
+          isSnappedToRoads = true;
+          if (roadSnapPolyline) roadSnapPolyline.setLatLngs(roadCoords);
+          if (routePolyline) routePolyline.setStyle({ color: '#c084fc', weight: 2, opacity: 0.3 });
+          roadSnapBadge.classList.remove('hidden');
+          btnSnapToRoads.textContent = 'Ver L�neas Directas';
+          btnSnapToRoads.classList.add('active');
+        }
+      } catch (e) {
+        console.warn('No se pudo ajustar a calles para la animaci�n, usando trazo directo:', e);
+      } finally {
+        btnPlayTrip.disabled = false;
+        btnPlayTrip.innerHTML = `
+          <svg class="ui-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          Simular Recorrido
+        `;
+      }
+    }
+
+    startTripAnimation();
+  });
+
+  if (btnPlayPause) {
+    btnPlayPause.addEventListener('click', () => {
+      if (!isAnimating) {
+        startTripAnimation();
+      } else if (isAnimPaused) {
+        resumeTripAnimation();
+      } else {
+        pauseTripAnimation();
+      }
+    });
+  }
+
+  if (btnRestartAnim) {
+    btnRestartAnim.addEventListener('click', () => {
+      restartTripAnimation();
+    });
+  }
+
+  if (playbackProgress) {
+    playbackProgress.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      seekTripAnimation(val / 100);
+    });
+  }
+
+  document.querySelectorAll('.btn-speed').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.btn-speed').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      animSpeedMultiplier = parseFloat(btn.dataset.speed) || 1;
+    });
+  });
+
+  if (btnClosePlayback) {
+    btnClosePlayback.addEventListener('click', () => {
+      stopTripAnimation();
+    });
+  }
+}
+
+function calculateBearing(lat1, lon1, lat2, lon2) {
+  const toRad = Math.PI / 180;
+  const toDeg = 180 / Math.PI;
+  const dLon = (lon2 - lon1) * toRad;
+  const y = Math.sin(dLon) * Math.cos(lat2 * toRad);
+  const x = Math.cos(lat1 * toRad) * Math.sin(lat2 * toRad) -
+            Math.sin(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.cos(dLon);
+  const brng = Math.atan2(y, x) * toDeg;
+  return (brng + 360) % 360;
+}
+
+function startTripAnimation() {
+  if (!currentlyViewedTrip || !currentlyViewedTrip.points) return;
+
+  stopTripAnimation();
+
+  // Coordenadas base: OSRM si existen, o puntos GPS directos
+  animRoadCoords = (currentlyViewedRoadCoordinates && currentlyViewedRoadCoordinates.length > 0)
+    ? currentlyViewedRoadCoordinates
+    : currentlyViewedTrip.points.map(p => [p.latitude, p.longitude]);
+
+  if (animRoadCoords.length < 2) return;
+
+  // Calcular distancias acumuladas en metros
+  animCumulativeDistances = [0];
+  let accDist = 0;
+  for (let i = 1; i < animRoadCoords.length; i++) {
+    const d = calculateDistanceBetweenKm(
+      animRoadCoords[i-1][0], animRoadCoords[i-1][1],
+      animRoadCoords[i][0], animRoadCoords[i][1]
+    ) * 1000;
+    accDist += d;
+    animCumulativeDistances.push(accDist);
+  }
+  animTotalDistanceMeters = Math.max(1, accDist);
+
+  // Duraci�n real del viaje en segundos
+  const p0Time = new Date(currentlyViewedTrip.points[0].timestamp).getTime();
+  const pLastTime = new Date(currentlyViewedTrip.points[currentlyViewedTrip.points.length - 1].timestamp).getTime();
+  animTotalDurationSec = Math.max(10, Math.round((pLastTime - p0Time) / 1000));
+
+  // Hitos de telemetr�a y tiempos de tramo entre puntos consecutivos
+  animMilestones = currentlyViewedTrip.points.map((p, idx) => {
+    const t = new Date(p.timestamp).getTime();
+    const elapsedSec = Math.round((t - p0Time) / 1000);
+    const deltaSec = idx === 0 ? 0 : Math.round((t - new Date(currentlyViewedTrip.points[idx - 1].timestamp).getTime()) / 1000);
+    const progressRatio = animTotalDurationSec > 0 ? (elapsedSec / animTotalDurationSec) : (idx / (currentlyViewedTrip.points.length - 1));
+    return {
+      index: idx,
+      point: p,
+      elapsedSec: elapsedSec,
+      deltaSec: deltaSec,
+      progressRatio: Math.min(1, Math.max(0, progressRatio))
+    };
+  });
+
+  if (playbackTotalTime) playbackTotalTime.textContent = formatSec(animTotalDurationSec);
+  if (playbackCurrentTime) playbackCurrentTime.textContent = '00:00';
+  if (playbackProgress) playbackProgress.value = 0;
+  animCurrentProgress = 0;
+
+  // Crear polil�nea animada que se va pintando detr�s del coche
+  if (animProgressPolyline) map.removeLayer(animProgressPolyline);
+  animProgressPolyline = L.polyline([], {
+    color: '#38bdf8',
+    weight: 6,
+    opacity: 0.95,
+    lineCap: 'round',
+    lineJoin: 'round'
+  }).addTo(map);
+
+  // Crear marcador del cochecito
+  const initialBearing = calculateBearing(
+    animRoadCoords[0][0], animRoadCoords[0][1],
+    animRoadCoords[1][0], animRoadCoords[1][1]
+  );
+  
+  if (animVehicleMarker) map.removeLayer(animVehicleMarker);
+  animVehicleMarker = createVehicleMarker(animRoadCoords[0][0], animRoadCoords[0][1], initialBearing).addTo(map);
+
+  if (playbackControls) playbackControls.classList.remove('hidden');
+  isAnimating = true;
+  isAnimPaused = false;
+  if (playPauseIcon) {
+    playPauseIcon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`;
+  }
+  animLastFrameTime = 0;
+
+  if (chkFollowVehicle && chkFollowVehicle.checked) {
+    map.setView([animRoadCoords[0][0], animRoadCoords[0][1]], 16);
+  }
+
+  log('[Simulador] Iniciando recorrido del veh�culo por el trazo...', 'log-system');
+  animRafId = requestAnimationFrame(stepAnimation);
+}
+
+function pauseTripAnimation() {
+  isAnimPaused = true;
+  if (animRafId) cancelAnimationFrame(animRafId);
+  animRafId = null;
+  if (playPauseIcon) {
+    playPauseIcon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
+  }
+}
+
+function resumeTripAnimation() {
+  if (!isAnimating) {
+    startTripAnimation();
+    return;
+  }
+  isAnimPaused = false;
+  animLastFrameTime = 0;
+  if (playPauseIcon) {
+    playPauseIcon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`;
+  }
+  animRafId = requestAnimationFrame(stepAnimation);
+}
+
+function restartTripAnimation() {
+  animCurrentProgress = 0;
+  resumeTripAnimation();
+}
+
+function stopTripAnimation() {
+  isAnimating = false;
+  isAnimPaused = false;
+  if (animRafId) cancelAnimationFrame(animRafId);
+  animRafId = null;
+  if (animVehicleMarker && map) {
+    map.removeLayer(animVehicleMarker);
+    animVehicleMarker = null;
+  }
+  if (animProgressPolyline && map) {
+    map.removeLayer(animProgressPolyline);
+    animProgressPolyline = null;
+  }
+  if (playbackControls) playbackControls.classList.add('hidden');
+  if (playPauseIcon) {
+    playPauseIcon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
+  }
+}
+
+function seekTripAnimation(targetRatio) {
+  animCurrentProgress = Math.min(1, Math.max(0, targetRatio));
+  renderAnimationFrame(animCurrentProgress);
+}
+
+function stepAnimation(timestamp) {
+  if (!isAnimating || isAnimPaused) return;
+
+  if (!animLastFrameTime) animLastFrameTime = timestamp;
+  const deltaMs = timestamp - animLastFrameTime;
+  animLastFrameTime = timestamp;
+
+  // Duraci�n base visual: recorrido completo en ~30s a 1x
+  const visualDurationSec = Math.min(45, Math.max(20, animTotalDurationSec / 10));
+  const progressInc = (deltaMs / 1000) * (animSpeedMultiplier / visualDurationSec);
+
+  animCurrentProgress = Math.min(1, animCurrentProgress + progressInc);
+  renderAnimationFrame(animCurrentProgress);
+
+  if (animCurrentProgress >= 1) {
+    pauseTripAnimation();
+    if (playPauseIcon) {
+      playPauseIcon.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M1 4v6h6"></path><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>`;
+    }
+    log('[Simulador] Recorrido finalizado con �xito.', 'log-sync');
+    return;
+  }
+
+  animRafId = requestAnimationFrame(stepAnimation);
+}
+
+function renderAnimationFrame(progress) {
+  if (!animRoadCoords || animRoadCoords.length < 2) return;
+
+  const targetDist = progress * animTotalDistanceMeters;
+
+  // 1. Encontrar segmento geom�trico correspondiente
+  let segIdx = 0;
+  for (let i = 0; i < animCumulativeDistances.length - 1; i++) {
+    if (animCumulativeDistances[i] <= targetDist && targetDist <= animCumulativeDistances[i + 1]) {
+      segIdx = i;
+      break;
+    }
+  }
+
+  const dStart = animCumulativeDistances[segIdx];
+  const dEnd = animCumulativeDistances[segIdx + 1] || (dStart + 1);
+  const segFraction = Math.min(1, Math.max(0, (targetDist - dStart) / (dEnd - dStart)));
+
+  const p1 = animRoadCoords[segIdx];
+  const p2 = animRoadCoords[Math.min(animRoadCoords.length - 1, segIdx + 1)];
+
+  const curLat = p1[0] + (p2[0] - p1[0]) * segFraction;
+  const curLng = p1[1] + (p2[1] - p1[1]) * segFraction;
+
+  // 2. Calcular �ngulo de direcci�n / rumbo (bearing) hacia la siguiente curva
+  const lookAheadCoord = animRoadCoords[Math.min(animRoadCoords.length - 1, segIdx + 1)];
+  const bearing = calculateBearing(curLat, curLng, lookAheadCoord[0], lookAheadCoord[1]);
+
+  // 3. Mover y rotar cochecito
+  if (animVehicleMarker) {
+    animVehicleMarker.setLatLng([curLat, curLng]);
+    const iconBody = document.getElementById('vehicleIconBody');
+    if (iconBody) {
+      iconBody.style.transform = `rotate(${Math.round(bearing)}deg)`;
+    }
+  }
+
+  // 4. Pintar polil�nea recorrida progresivamente
+  if (animProgressPolyline) {
+    const coordsUpToSeg = animRoadCoords.slice(0, segIdx + 1);
+    coordsUpToSeg.push([curLat, curLng]);
+    animProgressPolyline.setLatLngs(coordsUpToSeg);
+  }
+
+  // 5. Determinar tramo de punto a punto y tiempo que tard�
+  let currentMilestone = animMilestones[0];
+  let nextMilestone = animMilestones[1] || animMilestones[0];
+  for (let m = 0; m < animMilestones.length - 1; m++) {
+    if (animMilestones[m].progressRatio <= progress && progress <= animMilestones[m + 1].progressRatio) {
+      currentMilestone = animMilestones[m];
+      nextMilestone = animMilestones[m + 1];
+      break;
+    }
+  }
+
+  const segmentTimeSec = nextMilestone ? nextMilestone.deltaSec : 0;
+  const currentSpeed = nextMilestone ? (nextMilestone.point.speed || 32) : 32;
+
+  // Actualizar indicador de tiempo de tramo
+  if (hudSegmentTimeText) {
+    hudSegmentTimeText.textContent = `Tramo #${currentMilestone.index + 1} ? #${nextMilestone.index + 1}: +${segmentTimeSec}s`;
+  }
+
+  // Actualizar tooltip flotante sobre el coche
+  const tooltipTag = document.getElementById('vehicleTooltipTag');
+  if (tooltipTag) {
+    tooltipTag.textContent = `${currentSpeed} km/h � +${segmentTimeSec}s`;
+  }
+
+  // Actualizar HUD
+  if (hudSpeedText) hudSpeedText.textContent = `${currentSpeed} km/h`;
+  if (hudDistanceText) hudDistanceText.textContent = `${(targetDist / 1000).toFixed(2)} km`;
+  if (playbackCurrentTime) playbackCurrentTime.textContent = formatSec(Math.round(progress * animTotalDurationSec));
+  if (playbackProgress) playbackProgress.value = (progress * 100).toFixed(1);
+
+  // C�mara que sigue al coche
+  if (chkFollowVehicle && chkFollowVehicle.checked) {
+    map.panTo([curLat, curLng], { animate: false });
+  }
+}
+
+function formatSec(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function createVehicleMarker(lat, lng, initialBearing = 0) {
+  const icon = L.divIcon({
+    className: 'custom-vehicle-div-icon',
+    html: `
+      <div class="vehicle-marker-wrapper">
+        <div class="vehicle-halo"></div>
+        <div class="vehicle-tooltip-tag" id="vehicleTooltipTag">0 km/h</div>
+        <div class="vehicle-icon-svg" id="vehicleIconBody" style="transform: rotate(${initialBearing}deg)">
+          <svg width="34" height="34" viewBox="0 0 48 48" fill="none">
+            <defs>
+              <filter id="carGlow" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.8"/>
+              </filter>
+            </defs>
+            <g filter="url(#carGlow)">
+              <rect x="15" y="6" width="18" height="36" rx="6" fill="#0284c7" stroke="#38bdf8" stroke-width="2"/>
+              <rect x="17" y="16" width="14" height="15" rx="3" fill="#0f172a" stroke="#38bdf8" stroke-width="1.2"/>
+              <polygon points="18,16 30,16 28,12 20,12" fill="#38bdf8" fill-opacity="0.7"/>
+              <polygon points="18,31 30,31 29,33 19,33" fill="#38bdf8" fill-opacity="0.7"/>
+              <circle cx="17.5" cy="8" r="2.2" fill="#fef08a"/>
+              <circle cx="30.5" cy="8" r="2.2" fill="#fef08a"/>
+              <circle cx="17.5" cy="40" r="1.8" fill="#ef4444"/>
+              <circle cx="30.5" cy="40" r="1.8" fill="#ef4444"/>
+              <rect x="12" y="10" width="3" height="7" rx="1.5" fill="#000000"/>
+              <rect x="33" y="10" width="3" height="7" rx="1.5" fill="#000000"/>
+              <rect x="12" y="31" width="3" height="7" rx="1.5" fill="#000000"/>
+              <rect x="33" y="31" width="3" height="7" rx="1.5" fill="#000000"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+    `,
+    iconSize: [44, 44],
+    iconAnchor: [22, 22]
+  });
+
+  return L.marker([lat, lng], { icon: icon, zIndexOffset: 2000 });
+}
+
+
 function exitHistoricalTripView() {
   isViewingHistoricalTrip = false;
   currentlyViewedTrip = null;
   isSnappedToRoads = false;
+  currentlyViewedRoadCoordinates = null;
+  stopTripAnimation();
   viewingTripBanner.classList.add('hidden');
   roadSnapBadge.classList.add('hidden');
-  btnSnapToRoads.textContent = '🛣️ Ajustar a Calles';
+  btnSnapToRoads.textContent = '️ Ajustar a Calles';
   btnSnapToRoads.classList.remove('active');
   mapHeading.textContent = 'Recorrido del Viaje';
 
@@ -1775,6 +2216,7 @@ try {
 window.addEventListener('DOMContentLoaded', () => {
   initMap();
   renderStopsList();
+  initPlaybackControls();
   updateHistoryBadge();
   loadTripsHistory();
 });
