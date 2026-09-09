@@ -1402,8 +1402,10 @@ async function viewTripOnMap(tripId) {
   }
 
   currentlyViewedTrip = trip;
+  currentlyViewedRoadCoordinates = null;
+  stopTripAnimation();
   isSnappedToRoads = false;
-  btnSnapToRoads.textContent = '️ Ajustar a Calles';
+  btnSnapToRoads.textContent = 'Ajustar a Calles';
   btnSnapToRoads.classList.remove('active');
   btnSnapToRoads.disabled = false;
   roadSnapBadge.classList.add('hidden');
@@ -2024,13 +2026,13 @@ function renderAnimationFrame(progress) {
 
   // Actualizar indicador de tiempo de tramo
   if (hudSegmentTimeText) {
-    hudSegmentTimeText.textContent = `Tramo #${currentMilestone.index + 1} ? #${nextMilestone.index + 1}: +${segmentTimeSec}s`;
+    hudSegmentTimeText.textContent = `Tramo #${currentMilestone.index + 1} -> #${nextMilestone.index + 1}: +${segmentTimeSec}s`;
   }
 
   // Actualizar tooltip flotante sobre el coche
   const tooltipTag = document.getElementById('vehicleTooltipTag');
   if (tooltipTag) {
-    tooltipTag.textContent = `${currentSpeed} km/h � +${segmentTimeSec}s`;
+    tooltipTag.textContent = `${currentSpeed} km/h • +${segmentTimeSec}s`;
   }
 
   // Actualizar HUD
