@@ -12,7 +12,13 @@ let watcherId = null;
 let wakeLockSentinel = null;
 let countdownTimer = null;
 let tripDurationTimer = null;
+let heartbeatTimer = null;
 let deferredPrompt = null;
+
+// Web Audio API Keepalive Context
+let audioCtx = null;
+let audioOscillator = null;
+let audioGain = null;
 
 // Estado del viaje activo
 let currentTripId = null;
@@ -23,6 +29,7 @@ let stops = [];
 let totalDistanceKm = 0;
 let lastCommittedTime = 0;
 let bestCandidateInWindow = null;
+let wasScreenHiddenInWindow = false;
 let backgroundPointsCount = 0;
 let currentLat = null;
 let currentLng = null;
@@ -559,7 +566,8 @@ async function syncPendingOfflineData() {
 document.addEventListener('visibilitychange', () => {
   const isHidden = document.hidden;
   if (isHidden) {
-    log('📱 Pantalla bloqueada / Segundo plano. Audio Loop mantiene el proceso vivo.', 'log-bg');
+    wasScreenHiddenInWindow = true;
+    log('📱 Pantalla bloqueada / Segundo plano. Audio Loop y Web Audio mantienen el proceso vivo.', 'log-bg');
   } else {
     log('👁️ PWA restaurada a primer plano.', 'log-system');
     if (isTracking && useWakeLockCheckbox.checked) {
@@ -595,28 +603,63 @@ function releaseScreenWakeLock() {
 }
 
 // ----------------------------------------------------------------------------
-// AUDIO LOOP HACK (Motor de Segundo Plano)
+// AUDIO LOOP HACK & WEB AUDIO ENGINE (Motor de Segundo Plano Indestructible)
 // ----------------------------------------------------------------------------
 function startAudioLoopHack() {
-  if (!bgAudio) return;
+  // 1. Iniciar HTML5 Audio silencioso
+  if (bgAudio) {
+    bgAudio.volume = 0.05;
+    bgAudio.play().then(() => {
+      log('🔊 Audio Loop HTML5 iniciado.', 'log-bg');
+    }).catch((err) => {
+      console.warn('Aviso Audio HTML5:', err.message);
+    });
+  }
 
-  bgAudio.volume = 0.05;
-  bgAudio.play().then(() => {
-    log('🔊 Audio Loop Hack iniciado: el teléfono no dormirá el GPS al bloquear la pantalla.', 'log-bg');
+  // 2. Iniciar Web Audio API sintetizado continuo (inaudible a 25Hz con ganancia mínima)
+  // Esto mantiene el hilo de audio del SO despierto permanentemente aunque se apague la pantalla
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (AudioContextClass) {
+      if (!audioCtx || audioCtx.state === 'closed') {
+        audioCtx = new AudioContextClass();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
 
-    if ('mediaSession' in navigator) {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: currentTripName || 'GPS Tracker - Grabando Viaje',
-        artist: 'Rastreo cada 20s en segundo plano',
-        album: 'Audio Loop Heartbeat'
-      });
-      navigator.mediaSession.playbackState = 'playing';
-      navigator.mediaSession.setActionHandler('pause', () => pauseTracking());
-      navigator.mediaSession.setActionHandler('play', () => startTracking());
+      if (!audioOscillator) {
+        audioOscillator = audioCtx.createOscillator();
+        audioGain = audioCtx.createGain();
+
+        audioOscillator.type = 'sine';
+        audioOscillator.frequency.setValueAtTime(25, audioCtx.currentTime); // 25Hz: inaudible para el oído humano
+        audioGain.gain.setValueAtTime(0.001, audioCtx.currentTime); // Amplitud casi nula
+
+        audioOscillator.connect(audioGain);
+        audioGain.connect(audioCtx.destination);
+        audioOscillator.start();
+        log('⚡ Motor Web Audio API activo: el hilo de ejecución no se suspenderá.', 'log-bg');
+      }
     }
-  }).catch((err) => {
-    log(`Aviso Audio: ${err.message}`, 'log-err');
-  });
+  } catch (err) {
+    console.warn('Web Audio API no soportado:', err);
+  }
+
+  // 3. Registrar MediaSession para que el SO muestre controles multimedia en pantalla de bloqueo
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: currentTripName || 'GPS Tracker - Grabando Viaje',
+      artist: 'Rastreo continuo cada 20s (Segundo plano activo)',
+      album: 'Mapi GPS Engine'
+    });
+    navigator.mediaSession.playbackState = 'playing';
+    navigator.mediaSession.setActionHandler('pause', () => pauseTracking());
+    navigator.mediaSession.setActionHandler('play', () => startTracking());
+  }
+
+  // 4. Iniciar Heartbeat de consulta activa cada 10s
+  startHeartbeatLoop();
 }
 
 function stopAudioLoopHack() {
@@ -624,12 +667,27 @@ function stopAudioLoopHack() {
     bgAudio.pause();
     bgAudio.currentTime = 0;
   }
+  try {
+    if (audioOscillator) {
+      audioOscillator.stop();
+      audioOscillator.disconnect();
+      audioOscillator = null;
+    }
+    if (audioCtx && audioCtx.state !== 'closed') {
+      audioCtx.close();
+      audioCtx = null;
+    }
+  } catch (e) {}
+
   if ('mediaSession' in navigator) {
     navigator.mediaSession.playbackState = 'paused';
   }
+
+  stopHeartbeatLoop();
 }
 
-bgAudio.addEventListener('timeupdate', () => {
+// Heartbeat activo: llama a getCurrentPosition periódicamente incluso con pantalla apagada
+function triggerGpsHeartbeat() {
   if (!isTracking) return;
 
   const now = Date.now();
@@ -644,10 +702,29 @@ bgAudio.addEventListener('timeupdate', () => {
       navigator.geolocation.getCurrentPosition(
         handleIncomingPosition,
         (err) => console.warn('Heartbeat GPS fix error:', err.message),
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 8000 }
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 9000 }
       );
     }
   }
+}
+
+function startHeartbeatLoop() {
+  stopHeartbeatLoop();
+  // Pulso cada 5 segundos para evaluar si la ventana de 20s se cumplió
+  heartbeatTimer = setInterval(triggerGpsHeartbeat, 5000);
+}
+
+function stopHeartbeatLoop() {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
+}
+
+// Respaldo de audio timeupdate (se dispara unas 4 veces por segundo mientras el audio corre)
+bgAudio.addEventListener('timeupdate', () => {
+  if (!isTracking) return;
+  triggerGpsHeartbeat();
 });
 
 // ----------------------------------------------------------------------------
@@ -711,6 +788,7 @@ function handleIncomingPosition(pos) {
   // No se descarta ningún punto: se registra el 100% de ubicaciones recibidas
   const now = Date.now();
   const targetIntervalMs = (parseInt(intervalSelect.value, 10) || 20) * 1000;
+  const currentHidden = isHidden || wasScreenHiddenInWindow;
 
   if (!bestCandidateInWindow || (accuracy && accuracy < (bestCandidateInWindow.accuracy || 999))) {
     bestCandidateInWindow = {
@@ -719,9 +797,12 @@ function handleIncomingPosition(pos) {
       accuracy: accuracy,
       speed: speed,
       timestamp: new Date().toISOString(),
-      isBackground: isHidden,
+      isBackground: currentHidden,
       tripId: currentTripId
     };
+  } else if (currentHidden && !bestCandidateInWindow.isBackground) {
+    // Si la pantalla estuvo apagada durante esta ventana, mantener la marca de segundo plano
+    bestCandidateInWindow.isBackground = true;
   }
 
   if (now - lastCommittedTime >= targetIntervalMs) {
@@ -731,12 +812,13 @@ function handleIncomingPosition(pos) {
       accuracy: accuracy,
       speed: speed,
       timestamp: new Date().toISOString(),
-      isBackground: isHidden,
+      isBackground: currentHidden,
       tripId: currentTripId
     });
 
     lastCommittedTime = now;
     bestCandidateInWindow = null;
+    wasScreenHiddenInWindow = document.hidden;
   }
 }
 
@@ -1043,6 +1125,9 @@ function resetActiveTripState() {
   stops = [];
   totalDistanceKm = 0;
   backgroundPointsCount = 0;
+  bestCandidateInWindow = null;
+  wasScreenHiddenInWindow = false;
+  lastCommittedTime = 0;
   currentLat = null;
   currentLng = null;
 
@@ -1274,18 +1359,23 @@ async function viewTripOnMap(tripId) {
           .addTo(tripPointsLayerGroup);
       } else {
         // Círculo interactivo para cada punto de 20s
+        // Morado/Violeta brillante para puntos en segundo plano/bloqueado, Azul/Cyan para pantalla encendida
+        const markerBorderColor = p.isBackground ? '#a855f7' : '#0284c7';
+        const markerFillColor = p.isBackground ? '#ec4899' : '#38bdf8';
         const pointMarker = L.circleMarker([p.latitude, p.longitude], {
-          radius: 5,
-          color: '#3b82f6',
-          fillColor: '#c084fc',
-          fillOpacity: 0.9,
+          radius: p.isBackground ? 6 : 5,
+          color: markerBorderColor,
+          fillColor: markerFillColor,
+          fillOpacity: 0.95,
           weight: 2
         });
 
-        const bgStatus = p.isBackground ? '📱 Pantalla Bloqueada' : '👁️ Pantalla Encendida';
+        const bgStatus = p.isBackground 
+          ? '<span style="color:#9333ea; font-weight:bold;">📱 Pantalla Bloqueada (Segundo Plano)</span>' 
+          : '<span style="color:#0284c7; font-weight:bold;">👁️ Pantalla Encendida</span>';
         pointMarker.bindPopup(`
           <div style="font-family: sans-serif; color: #0f172a; font-size: 0.85rem;">
-            <strong>Punto #${idx + 1}</strong> (${bgStatus})<br>
+            <strong>Punto #${idx + 1}</strong> — ${bgStatus}<br>
             <span>Hora: ${timeStr}</span><br>
             <span>Velocidad: ${p.speed || 0} km/h</span><br>
             <span>Precisión: ±${p.accuracy || 0} m</span><br>
