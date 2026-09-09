@@ -1,0 +1,9 @@
+{
+  "appId": "com.antigravity.gpstracker",
+  "appName": "GPS Background Tracker",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "plugins": {
+    "BackgroundGeolocation": {}
+  }
+}

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>GPS Tracker PWA & Dashboard</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="lib/leaflet/leaflet.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Overlay para Modo Pantalla Negra / Modo Bolsillo (OLED) -->
+  <div id="pocketModeOverlay" class="pocket-overlay hidden">
+    <div class="pocket-content">
+      <p class="pocket-title">Modo Bolsillo Activo</p>
+      <p class="pocket-desc">Pantalla atenuada para ahorrar batería. El Audio Loop mantiene el GPS grabando cada 10s.</p>
+      <div class="pocket-counter">
+        <span id="pocketPoints">0</span> puntos | <span id="pocketDistance">0.00</span> km
+      </div>
+      <button id="btnExitPocket" class="btn btn-secondary">Salir del Modo Bolsillo</button>
+    </div>
+  </div>
+
+  <!-- Modal para Registrar Parada -->
+  <div id="stopModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h3>📍 Registrar Parada</h3>
+      <p class="modal-sub">Se guardará tu ubicación GPS actual como una parada en el viaje.</p>
+      <div class="input-group">
+        <label for="stopNote">Motivo o Nombre de la Parada:</label>
+        <input type="text" id="stopNote" placeholder="Ej: Carga de gasolina, Almuerzo, Cliente..." />
+      </div>
+      <div class="modal-actions">
+        <button id="btnCancelStop" class="btn btn-secondary">Cancelar</button>
+        <button id="btnConfirmStop" class="btn btn-primary">Guardar Parada</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-container">
+    <header class="app-header">
+      <div class="header-title">
+        <span class="pulse-icon" id="pulseIndicator"></span>
+        <h1>GPS Tracker & Map</h1>
+      </div>
+      <div class="header-badges">
+        <button id="btnInstallPwa" class="badge pwa-install hidden">📲 Instalar</button>
+        <span class="badge badge-pulse" id="liveTag">Offline</span>
+      </div>
+    </header>
+
+    <!-- Controles Principales -->
+    <section class="controls-card">
+      <button id="btnStart" class="btn btn-primary btn-large">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+        Iniciar Viaje
+      </button>
+      <button id="btnStop" class="btn btn-danger btn-large" disabled>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12"></rect></svg>
+        Detener
+      </button>
+      <button id="btnOpenStopModal" class="btn btn-warning btn-large" disabled>
+        📍 Parada
+      </button>
+    </section>
+
+    <!-- Barra de Accesos Rápidos -->
+    <div class="quick-actions">
+      <button id="btnEnterPocket" class="btn btn-pocket" disabled>
+        🕶️ Modo Bolsillo (OLED)
+      </button>
+      <button id="btnCenterMap" class="btn btn-secondary btn-icon-only" title="Centrar Mapa en mi posición">
+        🎯 Centrar
+      </button>
+      <button id="btnFitMap" class="btn btn-secondary btn-icon-only" title="Ver todo el recorrido">
+        🗺️ Ajustar
+      </button>
+    </div>
+
+    <!-- Dashboard del Viaje en Vivo -->
+    <section class="grid-metrics dashboard-metrics">
+      <div class="metric-card">
+        <span class="metric-label">Distancia</span>
+        <span class="metric-value" id="valDistance">0.00 km</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">Tiempo</span>
+        <span class="metric-value" id="valDuration">00:00:00</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">Velocidad</span>
+        <span class="metric-value" id="valSpeed">0 km/h</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">Paradas</span>
+        <span class="metric-value text-warning" id="valStopsCount">0</span>
+      </div>
+    </section>
+
+    <!-- Visor del Mapa Leaflet -->
+    <section class="card map-card">
+      <div class="card-header">
+        <h2>Recorrido del Viaje</h2>
+        <span class="status-indicator" id="mapStatusText">Esperando GPS</span>
+      </div>
+      <div id="tripMap" class="map-viewport"></div>
+    </section>
+
+    <!-- Lista de Paradas del Viaje -->
+    <section class="card stops-card" id="stopsSection">
+      <div class="card-header">
+        <h2>Paradas Registradas (<span id="stopsTotalBadge">0</span>)</h2>
+      </div>
+      <div class="stops-list" id="stopsList">
+        <p class="empty-text">No has registrado paradas en este viaje.</p>
+      </div>
+    </section>
+
+    <!-- Estado y Señal GPS -->
+    <section class="card stats-card">
+      <div class="stat-row">
+        <span>Próxima Captura (10s):</span>
+        <strong id="nextCaptureCountdown" class="text-highlight">--</strong>
+      </div>
+      <div class="stat-row">
+        <span>Calidad GPS:</span>
+        <strong id="gpsQualityText" class="text-muted">Esperando señal</strong>
+      </div>
+      <div class="stat-row">
+        <span>Puntos Grabados:</span>
+        <strong id="pointsCount">0</strong>
+      </div>
+      <div class="stat-row">
+        <span>Última Coordenada:</span>
+        <span id="lastCoordText">--.------, --.------</span>
+      </div>
+    </section>
+
+    <!-- Configuración del Servidor y Audio Hack (Colapsable) -->
+    <details class="card config-details">
+      <summary class="config-summary">⚙️ Configuración del Servidor y Audio Hack</summary>
+      <div class="config-body">
+        <div class="input-group">
+          <label for="serverUrl">URL del Servidor (Render):</label>
+          <div class="input-row">
+            <input type="url" id="serverUrl" placeholder="https://tu-app.onrender.com" />
+            <button id="btnTestServer" class="btn btn-secondary">Probar</button>
+          </div>
+          <span class="status-indicator" id="serverStatus">Verificando...</span>
+        </div>
+        
+        <div class="settings-grid">
+          <div class="input-group">
+            <label for="intervalSelect">Intervalo:</label>
+            <select id="intervalSelect" class="form-select">
+              <option value="5">Cada 5 segundos</option>
+              <option value="10" selected>Cada 10 segundos (Recomendado)</option>
+              <option value="15">Cada 15 segundos</option>
+              <option value="30">Cada 30 segundos</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label for="minAccuracySelect">Precisión mínima:</label>
+            <select id="minAccuracySelect" class="form-select">
+              <option value="15" selected>Ultra Alta (&lt; 15 m)</option>
+              <option value="30">Alta (&lt; 30 m)</option>
+              <option value="50">Estándar (&lt; 50 m)</option>
+              <option value="999">Todas las lecturas</option>
+            </select>
+          </div>
+        </div>
+
+        <label class="checkbox-container">
+          <input type="checkbox" id="syncWithServer" checked>
+          <span>Enviar cada punto y parada a Render en tiempo real</span>
+        </label>
+        <label class="checkbox-container audio-hack-container">
+          <input type="checkbox" id="useAudioHack" checked>
+          <strong>🔊 Audio Loop Hack (Permite segundo plano con pantalla bloqueada)</strong>
+        </label>
+        <label class="checkbox-container">
+          <input type="checkbox" id="useWakeLock">
+          <span>Mantener pantalla encendida (Screen Wake Lock)</span>
+        </label>
+      </div>
+    </details>
+
+    <!-- Registro de Eventos (Consola en Vivo) -->
+    <details class="card log-card">
+      <summary class="config-summary">📝 Bitácora de Eventos (<span id="logCount">0</span>)</summary>
+      <div class="card-header" style="margin-top: 10px;">
+        <button id="btnClearLog" class="btn-text">Limpiar</button>
+      </div>
+      <div class="log-terminal" id="logConsole">
+        <div class="log-entry log-system">[PWA] Mapa listo. Presiona "Iniciar Viaje".</div>
+      </div>
+    </details>
+
+    <!-- Acciones de Datos -->
+    <footer class="app-footer">
+      <button id="btnExportJson" class="btn btn-outline">Exportar JSON</button>
+      <button id="btnExportCsv" class="btn btn-outline">Exportar CSV</button>
+      <button id="btnClearHistory" class="btn btn-outline-danger">Nuevo Viaje</button>
+    </footer>
+  </div>
+
+  <!-- Elemento de Audio Oculto para Segundo Plano -->
+  <audio id="bgAudio" src="assets/silence.wav" loop playsinline preload="auto"></audio>
+
+  <!-- Leaflet y Lógica -->
+  <script src="lib/leaflet/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

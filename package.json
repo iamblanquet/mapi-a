@@ -1,0 +1,26 @@
+{
+  "name": "gps-tracker-pwa",
+  "version": "1.0.0",
+  "description": "PWA de rastreo GPS de alta precisión (cada 10s) con Wake Lock, Modo Bolsillo y despliegue en Render",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "build": "echo 'No build step required for static www'",
+    "cap:sync": "cap sync",
+    "cap:android": "cap open android"
+  },
+  "keywords": ["gps", "background-geolocation", "capacitor", "pwa", "foreground-service"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@capacitor-community/background-geolocation": "^1.2.22",
+    "@capacitor/android": "^7.0.1",
+    "@capacitor/cli": "^7.0.1",
+    "@capacitor/core": "^7.0.1",
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
