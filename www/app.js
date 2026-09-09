@@ -756,6 +756,20 @@ function commitPosition(record) {
     const addedKm = calculateDistanceBetweenKm(prev.latitude, prev.longitude, record.latitude, record.longitude);
     if (addedKm < 0.8) {
       totalDistanceKm += addedKm;
+
+      // Si el chip GPS no entrega velocidad instantánea, calcularla por desplazamiento (distancia / tiempo)
+      if (!record.speed || record.speed === 0) {
+        const timeDiffSec = (new Date(record.timestamp) - new Date(prev.timestamp)) / 1000;
+        if (timeDiffSec > 0) {
+          const speedKmh = Math.round((addedKm / timeDiffSec) * 3600);
+          if (speedKmh < 180) {
+            record.speed = speedKmh;
+            if (!document.hidden && !isViewingHistoricalTrip) {
+              valSpeed.textContent = `${speedKmh} km/h`;
+            }
+          }
+        }
+      }
     }
   }
 
